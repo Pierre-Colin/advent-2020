@@ -35,7 +35,7 @@ int
 day05(void)
 {
 	uint16_t highest = 0;
-	uint8_t present[1024] = { 0 };
+	uint8_t present[128] = { 0 };
 	char input[11];
 	int scanres;
 	while ((scanres = scanf("%10[FBLR]\n", input)) != EOF) {
@@ -56,7 +56,7 @@ day05(void)
 	}
 	printf("Highest\t%" PRIu16 "\n", highest);
 	bool began = false;
-	for (uint16_t i = 0; i < 1024; i++) {
+	for (uint16_t i = 0; i < 128; i++) {
 		for (uint8_t j = 0; j < 8; j++) {
 			if (!began && (present[i] & (1 << j)))
 				began = true;
