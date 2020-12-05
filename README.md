@@ -4,7 +4,7 @@ Advent of Code 2020
 This repository details my solutions to [Advent of Code
 2020](https://adventofcode.com/2020). Solutions are written in pure
 POSIX-compliant C99 as the [Suckless](http://suckless.org/) cult recommends.
-Coding style is mostly based on Suckless, but some changes were made.
+Coding style is mostly based on Suckless, but some freedoms were taken.
 
 Building
 --------
