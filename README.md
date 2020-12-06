@@ -40,11 +40,8 @@ To find where the algorithm for a particular day (say 3) is implemented, run:
 ```bash
 grep '^day03' *.c
 ```
-and `grep` will print two files:
-* one is `advent.c`, the main translation unit that links to all the other
-ones and declares the functions for all days;
-* the other one is the C file where the function you're looking for is
-written.
+and `grep` will print the C file where the function you're looking for is
+implemented.
 
 In order to keep the code relatively simple, the programs were written assuming
 my puzzle input format, but there's no guarantee yours will be the same. To
