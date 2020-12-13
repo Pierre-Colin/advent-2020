@@ -22,6 +22,7 @@ int day09(void);
 int day10(void);
 int day11(void);
 int day12(void);
+int day13(void);
 
 static int (*days[])(void) = {
 	day01,
@@ -35,7 +36,8 @@ static int (*days[])(void) = {
 	day09,
 	day10,
 	day11,
-	day12
+	day12,
+	day13
 };
 
 static uint8_t
