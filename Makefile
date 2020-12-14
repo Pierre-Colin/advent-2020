@@ -6,11 +6,11 @@ CC = cc
 BIN = advent
 SRC = advent.c reportrepair.c passwords.c toboggan.c passports.c boarding.c questions.c bags.c handheld.c encoding.c jolts.c seats.c ferry.c bus.c docking.c
 OBJ = ${SRC:.c=.o}
-CFLAGS = -std=c99 -Wall -Wextra -O3
-LDFLAGS = -flto
+CFLAGS = -std=c99 -Wall -Wextra -Og -pg
+LDFLAGS = -flto -pg
 
 ${BIN}: ${OBJ}
-	${CC} -o ${BIN} ${OBJ}
+	${CC} ${LDFLAGS} -o ${BIN} ${OBJ}
 
 .c.o:
 	${CC} ${CFLAGS} -c $<
