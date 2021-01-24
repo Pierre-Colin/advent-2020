@@ -242,44 +242,6 @@ checkperfectsquare(void)
 	}
 }
 
-static bool
-nexttry(Slot *const s)
-{
-	if (s->flip) {
-		if (s->rot == 3)
-			return false;
-		s->rot++;
-		return true;
-	} else {
-		if (s->rot == 3) {
-			s->flip = true;
-			s->rot = 0;
-		} else {
-			s->rot++;
-		}
-		return true;
-	}
-}
-
-static bool
-alreadyused(const Slot jigsaw[jigsawsz][jigsawsz],
-            const size_t y,
-            const size_t x,
-            const Tile *const tile)
-{
-	for (size_t r = 0; r < y; r++) {
-		for (size_t c = 0; c < jigsawsz; c++) {
-			if (jigsaw[r][c].tile == tile)
-				return true;
-		}
-	}
-	for (size_t c = 0; c < x; c++) {
-		if (jigsaw[y][c].tile == tile)
-			return true;
-	}
-	return false;
-}
-
 static void
 rotatebuf(const size_t sz, bool buf[sz][sz])
 {
@@ -307,21 +269,67 @@ rotatebuf(const size_t sz, bool buf[sz][sz])
 }
 
 static void
+flipbuf(const size_t sz, bool buf[sz][sz])
+{
+	for (size_t r = 0; r < sz; r++) {
+		for (size_t c = 0; 2 * c < sz; c++) {
+			const bool temp = buf[r][c];
+			buf[r][c] = buf[r][sz - 1 - c];
+			buf[r][sz - 1 - c] = temp;
+		}
+	}
+}
+
+static bool
+nexttry(bool tileimg[tilesz][tilesz], Slot *const s)
+{
+	if (s->flip) {
+		if (s->rot == 3)
+			return false;
+		s->rot++;
+		rotatebuf(tilesz, tileimg);
+		return true;
+	} else {
+		rotatebuf(tilesz, tileimg);
+		if (s->rot == 3) {
+			s->flip = true;
+			s->rot = 0;
+			flipbuf(tilesz, tileimg);
+		} else {
+			s->rot++;
+		}
+		return true;
+	}
+}
+
+static bool
+alreadyused(const Slot jigsaw[jigsawsz][jigsawsz],
+            const size_t y,
+            const size_t x,
+            const Tile *const tile)
+{
+	for (size_t r = 0; r < y; r++) {
+		for (size_t c = 0; c < jigsawsz; c++) {
+			if (jigsaw[r][c].tile == tile)
+				return true;
+		}
+	}
+	for (size_t c = 0; c < x; c++) {
+		if (jigsaw[y][c].tile == tile)
+			return true;
+	}
+	return false;
+}
+
+static void
 applyslot(bool buf[tilesz][tilesz], const Slot *const slot)
 {
 	for (size_t r = 0; r < tilesz; r++) {
 		for (size_t c = 0; c < tilesz; c++)
 			buf[r][c] = slot->tile->data[r * tilesz + c];
 	}
-	if (slot->flip) {
-		for (size_t r = 0; r < tilesz; r++) {
-			for (size_t c = 0; 2 * c < tilesz; c++) {
-				const bool temp = buf[r][c];
-				buf[r][c] = buf[r][tilesz - 1 - c];
-				buf[r][tilesz - 1 - c] = temp;
-			}
-		}
-	}
+	if (slot->flip)
+		flipbuf(tilesz, buf);
 	for (uint_least8_t t = 0; t < slot->rot; t++)
 		rotatebuf(tilesz, buf);
 }
@@ -345,14 +353,12 @@ fillright(bool right[tilesz], const Slot *restrict const slot)
 }
 
 static bool
-lastfits(const Slot jigsaw[jigsawsz][jigsawsz],
+lastfits(const bool tile[tilesz][tilesz],
          const size_t y,
          const size_t x,
          const bool up[tilesz],
          const bool left[tilesz])
 {
-	bool tile[tilesz][tilesz];
-	applyslot(tile, &jigsaw[y][x]);
 	for (size_t i = 0; i < tilesz; i++) {
 		if (y > 0 && tile[0][i] != up[i])
 			return false;
@@ -376,8 +382,10 @@ backtrack(Slot jigsaw[jigsawsz][jigsawsz], const size_t y, const size_t x)
 		jigsaw[y][x].tile = tile;
 		jigsaw[y][x].flip = false;
 		jigsaw[y][x].rot = 0;
+		bool tileimg[tilesz][tilesz];
+		applyslot(tileimg, &jigsaw[y][x]);
 		do {
-			if (lastfits(jigsaw, y, x, up, left)) {
+			if (lastfits(tileimg, y, x, up, left)) {
 				if (x + 1 == jigsawsz) {
 					if (y + 1 == jigsawsz)
 						return true;
@@ -387,7 +395,7 @@ backtrack(Slot jigsaw[jigsawsz][jigsawsz], const size_t y, const size_t x)
 					return true;
 				}
 			}
-		} while (nexttry(&jigsaw[y][x]));
+		} while (nexttry(tileimg, &jigsaw[y][x]));
 	}
 	return false;
 }
@@ -467,13 +475,7 @@ fitformonsters(bool image[imagesz][imagesz])
 	}
 	if (findmonsters(image))
 		return true;
-	for (size_t y = 0; y < imagesz; y++) {
-		for (size_t x = 0; 2 * x < imagesz; x++) {
-			const bool temp = image[y][x];
-			image[y][x] = image[y][imagesz - 1 - x];
-			image[y][imagesz - 1 - x] = temp;
-		}
-	}
+	flipbuf(imagesz, image);
 	for (uint_fast8_t t = 0; t < 3; t++) {
 		if (findmonsters(image))
 			return true;
