@@ -16,22 +16,22 @@
 /* Upper bound to how many digits a given type may hold */
 #define DIGITS(T) (CHAR_BIT * 10 * sizeof(T) / (9 * sizeof(char)))
 
-struct Piece {
+struct Tile {
 	uintmax_t num;
 	bool *data;
-	struct Piece *next;
+	struct Tile *next;
 };
 
-typedef struct Piece Piece;
+typedef struct Tile Tile;
 
 typedef struct {
-	const Piece *tile;
+	const Tile *tile;
 	bool flip;
 	uint_least8_t rot;
 } Slot;
 
-static size_t piecesz = 0;
-static Piece *head = NULL;
+static size_t tilesz = 0;
+static Tile *head = NULL;
 static size_t jigsawsz = 0;
 static size_t imagesz = 0;
 
@@ -56,8 +56,8 @@ printlineerror(const char *const str, const uintmax_t line)
 static bool
 hastile(const uintmax_t num)
 {
-	for (const Piece *piece = head; piece != NULL; piece = piece->next) {
-		if (piece->num == num)
+	for (const Tile *tile = head; tile != NULL; tile = tile->next) {
+		if (tile->num == num)
 			return true;
 	}
 	return false;
@@ -99,12 +99,12 @@ expectnewline(const uintmax_t line, void *const ptr)
 }
 
 static void
-fillpieceline(const uintmax_t line,
+filltileline(const uintmax_t line,
               const char *restrict const format,
               bool *restrict const tile,
               const size_t l)
 {
-	char buf[piecesz + 1];
+	char buf[tilesz + 1];
 	char newline;
 	const int result = scanf(format, buf, &newline);
 	if ((result < 2 && !feof(stdin)) || result < 1) {
@@ -118,7 +118,7 @@ fillpieceline(const uintmax_t line,
 		free(tile);
 		exit(EXIT_FAILURE);
 	}
-	for (size_t i = 0; i < piecesz; i++) {
+	for (size_t i = 0; i < tilesz; i++) {
 		if (buf[i] == 0) {
 			fprintf(stderr,
 			        "Inconsistent width on line %" PRIuMAX "\n",
@@ -126,7 +126,7 @@ fillpieceline(const uintmax_t line,
 			free(tile);
 			exit(EXIT_FAILURE);
 		}
-		tile[l * piecesz + i] = buf[i] == '#';
+		tile[l * tilesz + i] = buf[i] == '#';
 	}
 }
 
@@ -135,7 +135,7 @@ parsetile(uintmax_t *const line)
 {
 	static char format[8 + DIGITS(size_t)];
 	bool *tile = NULL;
-	if (piecesz == 0) {
+	if (tilesz == 0) {
 		char *input;
 		char newline;
 		if (scanf("%m[.#]%1c", &input, &newline) < 2) {
@@ -148,26 +148,26 @@ parsetile(uintmax_t *const line)
 			free(input);
 			exit(EXIT_FAILURE);
 		}
-		piecesz = strlen(input);
-		if ((tile = malloc(piecesz * piecesz * sizeof(bool))) == NULL) {
+		tilesz = strlen(input);
+		if ((tile = malloc(tilesz * tilesz * sizeof(bool))) == NULL) {
 			printlineerror("Allocation failed", *line);
 			free(input);
 			exit(EXIT_FAILURE);
 		}
-		for (size_t i = 0; i < piecesz; i++)
+		for (size_t i = 0; i < tilesz; i++)
 			tile[i] = input[i] == '#';
 		free(input);
 		(*line)++;
-		sprintf(format, "%%%zu[#.]%%c", piecesz);
+		sprintf(format, "%%%zu[#.]%%c", tilesz);
 	} else {
-		if ((tile = malloc(piecesz * piecesz * sizeof(bool))) == NULL) {
+		if ((tile = malloc(tilesz * tilesz * sizeof(bool))) == NULL) {
 			printlineerror("Allocation failed", *line);
 			exit(EXIT_FAILURE);
 		}
-		fillpieceline((*line)++, format, tile, 0);
+		filltileline((*line)++, format, tile, 0);
 	}
-	for (size_t l = 1; l < piecesz; l++)
-		fillpieceline((*line)++, format, tile, l);
+	for (size_t l = 1; l < tilesz; l++)
+		filltileline((*line)++, format, tile, l);
 	expectnewline(*line, tile);
 	return tile;
 }
@@ -184,7 +184,7 @@ keepparsing(void)
 static void
 parse(void)
 {
-	Piece *tail = NULL, *piece;
+	Tile *tail = NULL, *tile;
 	uintmax_t line = 1, num = 0;
 	while (keepparsing()) {
 		errno = 0;
@@ -195,20 +195,20 @@ parse(void)
 			        num);
 			exit(EXIT_FAILURE);
 		}
-		bool *const tile = parsetile(&line);
-		if ((piece = malloc(sizeof(Piece))) == NULL) {
+		bool *const tiledata = parsetile(&line);
+		if ((tile = malloc(sizeof(Tile))) == NULL) {
 			printlineerror("Allocation failed", line);
 			free(tile);
 			exit(EXIT_FAILURE);
 		}
-		piece->num = num;
-		piece->data = tile;
-		piece->next = NULL;
+		tile->num = num;
+		tile->data = tiledata;
+		tile->next = NULL;
 		if (head == NULL)
-			head = piece;
+			head = tile;
 		else
-			tail->next = piece;
-		tail = piece;
+			tail->next = tile;
+		tail = tile;
 		line++;
 	}
 }
@@ -231,7 +231,7 @@ static void
 checkperfectsquare(void)
 {
 	uintmax_t num = 0;
-	for (const Piece *piece = head; piece != NULL; piece = piece->next)
+	for (const Tile *tile = head; tile != NULL; tile = tile->next)
 		num++;
 	jigsawsz = isqrt(num);
 	if (jigsawsz * jigsawsz != num) {
@@ -265,16 +265,16 @@ static bool
 alreadyused(const Slot jigsaw[jigsawsz][jigsawsz],
             const size_t y,
             const size_t x,
-            const Piece *const piece)
+            const Tile *const tile)
 {
 	for (size_t r = 0; r < y; r++) {
 		for (size_t c = 0; c < jigsawsz; c++) {
-			if (jigsaw[r][c].tile == piece)
+			if (jigsaw[r][c].tile == tile)
 				return true;
 		}
 	}
 	for (size_t c = 0; c < x; c++) {
-		if (jigsaw[y][c].tile == piece)
+		if (jigsaw[y][c].tile == tile)
 			return true;
 	}
 	return false;
@@ -307,56 +307,56 @@ rotatebuf(const size_t sz, bool buf[sz][sz])
 }
 
 static void
-applyslot(bool buf[piecesz][piecesz], const Slot *const slot)
+applyslot(bool buf[tilesz][tilesz], const Slot *const slot)
 {
-	for (size_t r = 0; r < piecesz; r++) {
-		for (size_t c = 0; c < piecesz; c++)
-			buf[r][c] = slot->tile->data[r * piecesz + c];
+	for (size_t r = 0; r < tilesz; r++) {
+		for (size_t c = 0; c < tilesz; c++)
+			buf[r][c] = slot->tile->data[r * tilesz + c];
 	}
 	if (slot->flip) {
-		for (size_t r = 0; r < piecesz; r++) {
-			for (size_t c = 0; 2 * c < piecesz; c++) {
+		for (size_t r = 0; r < tilesz; r++) {
+			for (size_t c = 0; 2 * c < tilesz; c++) {
 				const bool temp = buf[r][c];
-				buf[r][c] = buf[r][piecesz - 1 - c];
-				buf[r][piecesz - 1 - c] = temp;
+				buf[r][c] = buf[r][tilesz - 1 - c];
+				buf[r][tilesz - 1 - c] = temp;
 			}
 		}
 	}
 	for (uint_least8_t t = 0; t < slot->rot; t++)
-		rotatebuf(piecesz, buf);
+		rotatebuf(tilesz, buf);
 }
 
 static void
-filldown(bool down[piecesz], const Slot *restrict const slot)
+filldown(bool down[tilesz], const Slot *restrict const slot)
 {
-	bool piece[piecesz][piecesz];
-	applyslot(piece, slot);
-	for (size_t i = 0; i < piecesz; i++)
-		down[i] = piece[piecesz - 1][i];
+	bool tile[tilesz][tilesz];
+	applyslot(tile, slot);
+	for (size_t i = 0; i < tilesz; i++)
+		down[i] = tile[tilesz - 1][i];
 }
 
 static void
-fillright(bool right[piecesz], const Slot *restrict const slot)
+fillright(bool right[tilesz], const Slot *restrict const slot)
 {
-	bool piece[piecesz][piecesz];
-	applyslot(piece, slot);
-	for (size_t i = 0; i < piecesz; i++)
-		right[i] = piece[i][piecesz - 1];
+	bool tile[tilesz][tilesz];
+	applyslot(tile, slot);
+	for (size_t i = 0; i < tilesz; i++)
+		right[i] = tile[i][tilesz - 1];
 }
 
 static bool
 lastfits(const Slot jigsaw[jigsawsz][jigsawsz],
          const size_t y,
          const size_t x,
-         const bool up[piecesz],
-         const bool left[piecesz])
+         const bool up[tilesz],
+         const bool left[tilesz])
 {
-	bool piece[piecesz][piecesz];
-	applyslot(piece, &jigsaw[y][x]);
-	for (size_t i = 0; i < piecesz; i++) {
-		if (y > 0 && piece[0][i] != up[i])
+	bool tile[tilesz][tilesz];
+	applyslot(tile, &jigsaw[y][x]);
+	for (size_t i = 0; i < tilesz; i++) {
+		if (y > 0 && tile[0][i] != up[i])
 			return false;
-		if (x > 0 && piece[i][0] != left[i])
+		if (x > 0 && tile[i][0] != left[i])
 			return false;
 	}
 	return true;
@@ -365,15 +365,15 @@ lastfits(const Slot jigsaw[jigsawsz][jigsawsz],
 static bool
 backtrack(Slot jigsaw[jigsawsz][jigsawsz], const size_t y, const size_t x)
 {
-	bool up[piecesz], left[piecesz];
+	bool up[tilesz], left[tilesz];
 	if (y > 0)
 		filldown(up, &jigsaw[y - 1][x]);
 	if (x > 0)
 		fillright(left, &jigsaw[y][x - 1]);
-	for (const Piece *piece = head; piece != NULL; piece = piece->next) {
-		if (alreadyused(jigsaw, y, x, piece))
+	for (const Tile *tile = head; tile != NULL; tile = tile->next) {
+		if (alreadyused(jigsaw, y, x, tile))
 			continue;
-		jigsaw[y][x].tile = piece;
+		jigsaw[y][x].tile = tile;
 		jigsaw[y][x].flip = false;
 		jigsaw[y][x].rot = 0;
 		do {
@@ -420,12 +420,12 @@ fillimage(bool image[imagesz][imagesz], const Slot jigsaw[jigsawsz][jigsawsz])
 {
 	for (size_t jy = 0; jy < jigsawsz; jy++) {
 		for (size_t jx = 0; jx < jigsawsz; jx++) {
-			bool tile[piecesz][piecesz];
+			bool tile[tilesz][tilesz];
 			applyslot(tile, &jigsaw[jy][jx]);
-			for (size_t ty = 0; ty + 2 < piecesz; ty++) {
-				for (size_t tx = 0; tx + 2 < piecesz; tx++) {
-					size_t iy = jy * (piecesz - 2) + ty;
-					size_t ix = jx * (piecesz - 2) + tx;
+			for (size_t ty = 0; ty + 2 < tilesz; ty++) {
+				for (size_t tx = 0; tx + 2 < tilesz; tx++) {
+					size_t iy = jy * (tilesz - 2) + ty;
+					size_t ix = jx * (tilesz - 2) + tx;
 					image[iy][ix] = tile[ty + 1][tx + 1];
 				}
 			}
@@ -515,7 +515,7 @@ static void
 freepieces(void)
 {
 	while (head != NULL) {
-		Piece *const next = head->next;
+		Tile *const next = head->next;
 		free(head->data);
 		free(head);
 		head = next;
@@ -537,13 +537,13 @@ day20(void)
 		return EXIT_FAILURE;
 	}
 	printf("Corners\t%" PRIuMAX "\n", prodcorners(jigsaw));
-	if (piecesz <= 2) {
+	if (tilesz <= 2) {
 		fprintf(stderr,
 		        "Tile size %zu is too small for part 2\n",
-		        piecesz);
+		        tilesz);
 		return EXIT_FAILURE;
 	}
-	imagesz = jigsawsz * (piecesz - 2);
+	imagesz = jigsawsz * (tilesz - 2);
 	bool image[imagesz][imagesz];
 	fillimage(image, jigsaw);
 	if (!fitformonsters(image)) {
