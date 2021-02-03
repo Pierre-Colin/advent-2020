@@ -4,7 +4,7 @@
 
 CC = cc
 BIN = advent
-SRC = advent.c reportrepair.c passwords.c toboggan.c passports.c boarding.c questions.c bags.c handheld.c encoding.c jolts.c seats.c ferry.c bus.c docking.c memgame.c tickets.c conway.c homework.c messages.c jigsaw.c allergen.c combat.c cups.c tiles.c door.c
+SRC = advent.c 01.c 02.c 03.c 04.c 05.c 06.c 07.c 08.c 09.c 10.c 11.c 12.c 13.c 14.c 15.c 16.c 17.c 18.c 19.c 20.c 21.c 22.c 23.c 24.c 25.c
 OBJ = ${SRC:.c=.o}
 CFLAGS = -std=c99 -Wall -Wextra -O3
 LDFLAGS = -flto

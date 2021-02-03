@@ -36,12 +36,9 @@ with your input (see debugging section).
 Debugging
 ---------
 
-To find where the algorithm for a particular day (say 3) is implemented, run:
-```bash
-grep '^day03' *.c
-```
-and `grep` will print the C file where the function you're looking for is
-implemented.
+Each file contains all the code required for a given day with the exception of
+`advent.c` which serves as a hub. That way, each day holds in a near standalone
+translation unit and may have its own global variable.
 
 In order to keep the code relatively simple, the programs were written assuming
 my puzzle input format, but there's no guarantee yours will be the same. To
@@ -53,8 +50,8 @@ make sure your puzzle input can be sensically stored (for day 3, lines are
 stored in 32-bit integers).
 
 All subprograms were confirmed leak-free with valgrind, at least for my
-correctly-passed puzzle input. If you manage to find leaks, feel free to send
-me how to reproduce it.
+correctly-passed puzzle input. If you manage to find leaks or any other error
+detected by valgrind, feel free to send me how to reproduce it.
 
 It has been observed that warnings pop up when lowering the optimization
 levels. This is due to the compiler not being able to figure out some safety
