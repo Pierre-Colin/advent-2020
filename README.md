@@ -52,9 +52,9 @@ you may change the macro `PATTERN_WIDTH`. Then, keep an eye on data types to
 make sure your puzzle input can be sensically stored (for day 3, lines are
 stored in 32-bit integers).
 
-Up to day 24, all subprograms were confirmed leak-free with valgrind, at least
-for my correctly-passed puzzle input. If you manage to find leaks, feel free to
-send me how to reproduce it.
+All subprograms were confirmed leak-free with valgrind, at least for my
+correctly-passed puzzle input. If you manage to find leaks, feel free to send
+me how to reproduce it.
 
 It has been observed that warnings pop up when lowering the optimization
 levels. This is due to the compiler not being able to figure out some safety
