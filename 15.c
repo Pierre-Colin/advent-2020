@@ -7,126 +7,102 @@
  */
 #include <errno.h>
 #include <inttypes.h>
-#include <stdint.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-struct Node {
-	uint32_t val;
-	uint32_t lastturn;
-	uint32_t slastturn;
-	struct Node *left;
-	struct Node *right;
-};
+#define PRINT_ERR(s) \
+	if (errno != 0) \
+		perror(s); \
+	else \
+		fputs(s "\n", stderr);
 
-typedef struct Node Node;
+typedef struct {
+	uintmax_t last, second;
+} History;
 
-static Node *root = NULL;
+static History *num = NULL;
+static size_t sz = 0;
 
-static Node *
-insertleaf(Node **const node, const uint32_t val, const uint32_t turn)
+static bool
+speak(const size_t n, const uintmax_t turn)
 {
-	Node *new = malloc(sizeof(Node));
-	if (new == NULL) {
-		perror("Allocation failed");
+	if (sz <= n) {
+		History *const new = realloc(num, (n + 1) * sizeof(History));
+		if (new == NULL)
+			return false;
+		for (size_t i = sz; i <= n; i++)
+			new[i].last = new[i].second = UINTMAX_MAX;
+		num = new;
+		sz = n + 1;
+	}
+	num[n].second = num[n].last;
+	num[n].last = turn;
+	return true;
+}
+
+static size_t
+playturn(const uintmax_t turn, const size_t last)
+{
+	if (num[last].second == UINTMAX_MAX) {
+		speak(0, turn);
+		return 0;
+	} else if (num[last].last - num[last].second > SIZE_MAX) {
+		fprintf(stderr,
+		        "Cannot store %ju without wraparound\n",
+		        num[last].last - num[last].second);
 		exit(EXIT_FAILURE);
-	}
-	new->val = val;
-	new->lastturn = turn;
-	new->slastturn = UINT32_MAX;
-	new->left = NULL;
-	new->right = NULL;
-	*node = new;
-	return new;
-}
-
-static Node *
-insert(const uint32_t val, const uint32_t turn)
-{
-	if (root == NULL)
-		return insertleaf(&root, val, turn);
-	Node *node = root;
-	for (;;) {
-		if (val == node->val) {
-			node->slastturn = node->lastturn;
-			node->lastturn = turn;
-			return node;
-		} else if (val < node->val) {
-			if (node->left == NULL)
-				return insertleaf(&node->left, val, turn);
-			else
-				node = node->left;
-		} else {
-			if (node->right == NULL)
-				return insertleaf(&node->right, val, turn);
-			else
-				node = node->right;
+	} else {
+		const size_t n = num[last].last - num[last].second;
+		if (!speak(n, turn)) {
+			PRINT_ERR("Could not speak the next number");
+			exit(EXIT_FAILURE);
 		}
+		return n;
 	}
 }
 
-static Node *
-playturn(Node *last, const uint32_t turn)
-{
-	if (last->slastturn == UINT32_MAX)
-		return insert(UINT32_C(0), turn);
-	return insert(last->lastturn - last->slastturn, turn);
-}
-
 static void
-freenode(Node *node)
+freenum(void)
 {
-	if (node == NULL)
-		return;
-	freenode(node->left);
-	freenode(node->right);
-	free(node);
-}
-
-static void
-freetree(void)
-{
-	freenode(root);
+	free(num);
 }
 
 int
 day15(void)
 {
-	if (atexit(freetree) != 0)
+	if (atexit(freenum) != 0)
 		fputs("Call to `atexit` failed; memory may leak\n", stderr);
-	uint32_t input;
-	uint32_t turn = 0;
-	Node *last = NULL;
+	uintmax_t turn = 0;
+	size_t input, last = SIZE_MAX;
 	int scanres;
-	while ((scanres = scanf("%" SCNu32, &input)) == 1) {
-		last = insert(input, turn);
-		switch (getchar()) {
-		default:
-			fputs("Bad input format\n", stderr);
+	errno = 0;
+	while ((scanres = scanf("%zu", &input)) == 1) {
+		if (!speak(input, turn++)) {
+			PRINT_ERR("Could not speak a starting number");
 			return EXIT_FAILURE;
-		case ',':
-		case '\n':
-		case EOF:
-			turn++;
 		}
+		const int next = getchar();
+		if (next != ',' && next != '\n' && next != EOF) {
+			fprintf(stderr, "Unexpected character: %c\n", next);
+			return EXIT_FAILURE;
+		}
+		last = input;
 	}
-	if (scanres != EOF) {
-		if (errno != 0)
-			perror("Input failed");
-		else
-			fputs("Bad input format\n", stderr);
+	if (!feof(stdin)) {
+		PRINT_ERR("Error occured during puzzle input parsing");
 		return EXIT_FAILURE;
 	}
-	if (last == NULL) {
-		fputs("There were no starting numbers\n", stderr);
+	if (last > sz) {
+		fputs("Number list was empty\n", stderr);
 		return EXIT_FAILURE;
 	}
-	while (turn < 2020)
-		last = playturn(last, turn++);
-	printf("2020th\t%" PRIu32 "\n", last->val);
-	while (turn < UINT32_C(30000000))
-		last = playturn(last, turn++);
-	printf("30Mth\t%" PRIu32 "\n", last->val);
+	while (turn < UINTMAX_C(2020))
+		last = playturn(turn++, last);
+	printf("2020th\t%zu\n", last);
+	while (turn < UINTMAX_C(30000000))
+		last = playturn(turn++, last);
+	printf("30Mth\t%zu\n", last);
 	return EXIT_SUCCESS;
 }
 
