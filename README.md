@@ -25,8 +25,8 @@ All subprograms assume your puzzle input is given through standard input.
 ```
 where `N` is the number of the day.
 
-**If you have a one-liner, run `./advent N`, enter your input and press
-Enter.**
+**If you have a one-liner, run `./advent N`, enter your input, press Enter and
+then Ctrl+D on a Unix-like OS or Ctrl+Z on Windows.**
 
 If the program gives you a bad input format error, check:
 * that the puzzle input corresponds to the day you chose in the parameter;
