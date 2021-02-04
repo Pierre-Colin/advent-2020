@@ -33,6 +33,15 @@ If the program gives you a bad input format error, check:
 * that when you built the program, the input-dependent constants are compatible
 with your input (see debugging section).
 
+To run all sub-programs one after the other, you may use the following command
+after saving all your puzzle inputs into appropriately-named files:
+```bash
+for i in {1..25}; do ./advent $i < input-$i; done
+```
+
+Currently, this takes between 5 and 6 seconds with most of it being spent
+freeing linked lists in day 22.
+
 Debugging
 ---------
 

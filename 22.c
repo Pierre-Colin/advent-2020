@@ -32,7 +32,7 @@ typedef struct Card Card;
 
 struct History {
 	Card *deck[2];
-	struct History *next;
+	struct History *left, *right;
 };
 
 typedef struct History History;
@@ -61,12 +61,12 @@ freedecks(Card *deck[2])
 static void
 freehistory(History *his)
 {
-	while (his != NULL) {
-		freedecks(his->deck);
-		History * const next = his->next;
-		free(his);
-		his = next;
-	}
+	if (his == NULL)
+		return;
+	freehistory(his->left);
+	freehistory(his->right);
+	freedecks(his->deck);
+	free(his);
 }
 
 static void
@@ -204,28 +204,22 @@ clonedeck(const Card *card)
 	return head;
 }
 
-static bool
-deckeq(const Card *a, const Card *b)
+static int
+cmpdeck(const Card *a, const Card *b)
 {
-	while (a != NULL && b != NULL) {
-		if (a == NULL || b == NULL || a->val != b->val)
-			return false;
+	while (a != NULL && b != NULL && a->val == b->val) {
 		a = a->next;
 		b = b->next;
 	}
-	return true;
-}
-
-static bool
-alreadyvisited(Card *deck[2], const History *his)
-{
-	while (his != NULL) {
-		if (deckeq(deck[0], his->deck[0])
-		    && deckeq(deck[1], his->deck[1]))
-			return true;
-		his = his->next;
-	}
-	return false;
+	if (a == NULL && b == NULL)
+		return 0;
+	if (a == NULL)
+		return -1;
+	if (b == NULL)
+		return 1;
+	if (a->val < b->val)
+		return -1;
+	return 1;
 }
 
 static int
@@ -261,24 +255,94 @@ playround(Card *card[2], const uintmax_t ncard[2])
 }
 
 static int
+cmphistory(Card *lhs[2], Card *rhs[2])
+{
+	const int cmp = cmpdeck(lhs[0], rhs[0]);
+	if (cmp != 0)
+		return cmp;
+	return cmpdeck(lhs[1], rhs[1]);
+}
+
+static int
+checkhistory(History ** const his, Card *deck[2])
+{
+	if (*his == NULL) {
+		if ((*his = malloc(sizeof(History))) == NULL)
+			return -1;
+		if (((*his)->deck[0] = clonedeck(deck[0])) == NULL) {
+			free(*his);
+			return -1;
+		}
+		if (((*his)->deck[1] = clonedeck(deck[1])) == NULL) {
+			freelist((*his)->deck[0]);
+			free(*his);
+			return -1;
+		}
+		(*his)->left = (*his)->right = NULL;
+		return 0;
+	}
+	History *it = *his;
+	for (;;) {
+		const int cmp = cmphistory(deck, it->deck);
+		if (cmp == 0)
+			return 1;
+		if (cmp < 0) {
+			if (it->left == NULL) {
+				History * const new = malloc(sizeof(History));
+				if (new == NULL)
+					return -1;
+				if (!(new->deck[0] = clonedeck(deck[0]))) {
+					free(new);
+					return -1;
+				}
+				if (!(new->deck[1] = clonedeck(deck[1]))) {
+					freelist(new->deck[0]);
+					free(new);
+					return -1;
+				}
+				new->left = new->right = NULL;
+				it->left = new;
+				return 0;
+			} else {
+				it = it->left;
+			}
+		} else {
+			if (it->right == NULL) {
+				History * const new = malloc(sizeof(History));
+				if (new == NULL)
+					return -1;
+				if (!(new->deck[0] = clonedeck(deck[0]))) {
+					free(new);
+					return -1;
+				}
+				if (!(new->deck[1] = clonedeck(deck[1]))) {
+					freelist(new->deck[0]);
+					free(new);
+					return -1;
+				}
+				new->left = new->right = NULL;
+				it->right = new;
+				return 0;
+			} else {
+				it = it->right;
+			}
+		}
+	}
+}
+
+static int
 recursivecombat_rec(Card *head[2],
                     Card *tail[2],
                     uintmax_t ncard[2],
                     uintmax_t * const score)
 {
-	History *his = malloc(sizeof(History));
-	if (his == NULL || (his->deck[0] = clonedeck(head[0])) == NULL) {
-		free(his);
-		return -1;
-	}
-	if ((his->deck[1] = clonedeck(head[1])) == NULL) {
-		freelist(his->deck[0]);
-		free(his);
-		return -1;
-	}
-	his->next = NULL;
+	History *his = NULL;
 	while (head[0] != NULL && head[1] != NULL) {
-		if (alreadyvisited(head, his->next)) {
+		const int hischeck = checkhistory(&his, head);
+		if (hischeck < 0) {
+			freehistory(his);
+			return -1;
+		} else if (hischeck > 0) {
 			/* Player 1 wins */
 			freehistory(his);
 			if (score != NULL) {
@@ -306,24 +370,6 @@ recursivecombat_rec(Card *head[2],
 		ncard[lose]--;
 		if (head[lose] == NULL)
 			break;
-		History * const new = malloc(sizeof(History));
-		if (new == NULL) {
-			freehistory(his);
-			return -1;
-		}
-		if ((new->deck[0] = clonedeck(head[0])) == NULL) {
-			free(new);
-			freehistory(his);
-			return -1;
-		}
-		if ((new->deck[1] = clonedeck(head[1])) == NULL) {
-			freelist(new->deck[0]);
-			free(new);
-			freehistory(his);
-			return -1;
-		}
-		new->next = his;
-		his = new;
 	}
 	freehistory(his);
 	int win = head[1] != NULL;
@@ -363,11 +409,11 @@ day22(void)
 		return EXIT_FAILURE;
 	}
 	if (card[0] == NULL || card[1] == NULL) {
-		fputs("Decks are not non empty\n", stderr);
+		fputs("At least one deck is empty\n", stderr);
 		return EXIT_FAILURE;
 	}
 	printf("Regular\t%ju\n", regularcombat());
-	uintmax_t score;
+	uintmax_t score = 0;
 	if (recursivecombat(&score) < 0) {
 		PRINT_ERR("Failed to unroll recursive combat game");
 		return EXIT_FAILURE;
