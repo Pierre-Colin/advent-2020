@@ -263,69 +263,46 @@ cmphistory(Card *lhs[2], const CardSlice rhs[2])
 	return cmpdeck(lhs[1], rhs + 1);
 }
 
+static bool
+addleaf(History ** const ptr, Card *deck[2])
+{
+	History * const new = malloc(sizeof(History));
+	if (new == NULL)
+		return false;
+	if (!clonedeck(new->deck, deck[0])) {
+		free(new);
+		return false;
+	}
+	if (!clonedeck(new->deck + 1, deck[1])) {
+		free(new->deck[0].a);
+		free(new);
+		return false;
+	}
+	new->left = new->right = NULL;
+	*ptr = new;
+	return true;
+}
+
 static int
 checkhistory(History ** const his, Card *deck[2])
 {
-	if (*his == NULL) {
-		if ((*his = malloc(sizeof(History))) == NULL)
-			return -1;
-		if (!clonedeck((*his)->deck, deck[0])) {
-			free(*his);
-			return -1;
-		}
-		if (!clonedeck((*his)->deck + 1, deck[1])) {
-			free((*his)->deck[0].a);
-			free(*his);
-			return -1;
-		}
-		(*his)->left = (*his)->right = NULL;
-		return 0;
-	}
+	if (*his == NULL)
+		return addleaf(his, deck)? 0 : -1;
 	History *it = *his;
 	for (;;) {
 		const int cmp = cmphistory(deck, it->deck);
 		if (cmp == 0)
 			return 1;
 		if (cmp < 0) {
-			if (it->left == NULL) {
-				History * const new = malloc(sizeof(History));
-				if (new == NULL)
-					return -1;
-				if (!clonedeck(new->deck, deck[0])) {
-					free(new);
-					return -1;
-				}
-				if (!clonedeck(new->deck + 1, deck[1])) {
-					free(new->deck[0].a);
-					free(new);
-					return -1;
-				}
-				new->left = new->right = NULL;
-				it->left = new;
-				return 0;
-			} else {
+			if (it->left == NULL)
+				return addleaf(&it->left, deck)? 0 : -1;
+			else
 				it = it->left;
-			}
 		} else {
-			if (it->right == NULL) {
-				History * const new = malloc(sizeof(History));
-				if (new == NULL)
-					return -1;
-				if (!clonedeck(new->deck, deck[0])) {
-					free(new);
-					return -1;
-				}
-				if (!clonedeck(new->deck + 1, deck[1])) {
-					free(new->deck[0].a);
-					free(new);
-					return -1;
-				}
-				new->left = new->right = NULL;
-				it->right = new;
-				return 0;
-			} else {
+			if (it->right == NULL)
+				return addleaf(&it->right, deck)? 0 : -1;
+			else
 				it = it->right;
-			}
 		}
 	}
 }
