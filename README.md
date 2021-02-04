@@ -39,8 +39,7 @@ after saving all your puzzle inputs into appropriately-named files:
 for i in {1..25}; do ./advent $i < input-$i; done
 ```
 
-Currently, this takes between 5 and 6 seconds with most of it being spent
-freeing linked lists in day 22.
+Currently, this takes between 2 and 3 seconds with day 15 being the longest.
 
 Debugging
 ---------

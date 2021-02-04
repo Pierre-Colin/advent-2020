@@ -30,8 +30,13 @@ struct Card {
 
 typedef struct Card Card;
 
+typedef struct {
+	uintmax_t *a;
+	size_t sz;
+} CardSlice;
+
 struct History {
-	Card *deck[2];
+	CardSlice deck[2];
 	struct History *left, *right;
 };
 
@@ -40,6 +45,7 @@ typedef struct History History;
 static int recursivecombat_rec(Card *[2], Card *[2], uintmax_t[2], uintmax_t *);
 
 static Card *card[2] = { NULL, NULL };
+static size_t totalcards = 0;
 
 static void
 freelist(Card *list)
@@ -65,7 +71,8 @@ freehistory(History *his)
 		return;
 	freehistory(his->left);
 	freehistory(his->right);
-	freedecks(his->deck);
+	free(his->deck[0].a);
+	free(his->deck[1].a);
 	free(his);
 }
 
@@ -122,6 +129,7 @@ parseplayer(const uint_fast8_t pnum, uintmax_t line)
 		else
 			tail->next = new;
 		tail = new;
+		totalcards++;
 	}
 	if (ferror(stdin)) {
 		parsingerror("Puzzle input failed", line);
@@ -182,42 +190,34 @@ regularcombat(void)
 	return score;
 }
 
-static Card *
-clonedeck(const Card *card)
+static bool
+clonedeck(CardSlice * const slice, const Card *card)
 {
-	Card *head = NULL, *tail = NULL;
+	if ((slice->a = malloc(totalcards * sizeof(uintmax_t))) == NULL)
+		return false;
+	slice->sz = 0;
 	while (card != NULL) {
-		Card * const new = malloc(sizeof(Card));
-		if (new == NULL) {
-			freelist(head);
-			return NULL;
-		}
-		new->val = card->val;
-		new->next = NULL;
-		if (head == NULL)
-			head = new;
-		else
-			tail->next = new;
-		tail = new;
+		slice->a[slice->sz++] = card->val;
 		card = card->next;
 	}
-	return head;
+	return true;
 }
 
 static int
-cmpdeck(const Card *a, const Card *b)
+cmpdeck(const Card *a, const CardSlice *b)
 {
-	while (a != NULL && b != NULL && a->val == b->val) {
+	size_t i = 0;
+	while (a != NULL && i < b->sz && a->val == b->a[i]) {
 		a = a->next;
-		b = b->next;
+		i++;
 	}
-	if (a == NULL && b == NULL)
+	if (a == NULL && i >= b->sz)
 		return 0;
 	if (a == NULL)
 		return -1;
-	if (b == NULL)
+	if (i >= b->sz)
 		return 1;
-	if (a->val < b->val)
+	if (a->val < b->a[i])
 		return -1;
 	return 1;
 }
@@ -255,12 +255,12 @@ playround(Card *card[2], const uintmax_t ncard[2])
 }
 
 static int
-cmphistory(Card *lhs[2], Card *rhs[2])
+cmphistory(Card *lhs[2], const CardSlice rhs[2])
 {
-	const int cmp = cmpdeck(lhs[0], rhs[0]);
+	const int cmp = cmpdeck(lhs[0], rhs);
 	if (cmp != 0)
 		return cmp;
-	return cmpdeck(lhs[1], rhs[1]);
+	return cmpdeck(lhs[1], rhs + 1);
 }
 
 static int
@@ -269,12 +269,12 @@ checkhistory(History ** const his, Card *deck[2])
 	if (*his == NULL) {
 		if ((*his = malloc(sizeof(History))) == NULL)
 			return -1;
-		if (((*his)->deck[0] = clonedeck(deck[0])) == NULL) {
+		if (!clonedeck((*his)->deck, deck[0])) {
 			free(*his);
 			return -1;
 		}
-		if (((*his)->deck[1] = clonedeck(deck[1])) == NULL) {
-			freelist((*his)->deck[0]);
+		if (!clonedeck((*his)->deck + 1, deck[1])) {
+			free((*his)->deck[0].a);
 			free(*his);
 			return -1;
 		}
@@ -291,12 +291,12 @@ checkhistory(History ** const his, Card *deck[2])
 				History * const new = malloc(sizeof(History));
 				if (new == NULL)
 					return -1;
-				if (!(new->deck[0] = clonedeck(deck[0]))) {
+				if (!clonedeck(new->deck, deck[0])) {
 					free(new);
 					return -1;
 				}
-				if (!(new->deck[1] = clonedeck(deck[1]))) {
-					freelist(new->deck[0]);
+				if (!clonedeck(new->deck + 1, deck[1])) {
+					free(new->deck[0].a);
 					free(new);
 					return -1;
 				}
@@ -311,12 +311,12 @@ checkhistory(History ** const his, Card *deck[2])
 				History * const new = malloc(sizeof(History));
 				if (new == NULL)
 					return -1;
-				if (!(new->deck[0] = clonedeck(deck[0]))) {
+				if (!clonedeck(new->deck, deck[0])) {
 					free(new);
 					return -1;
 				}
-				if (!(new->deck[1] = clonedeck(deck[1]))) {
-					freelist(new->deck[0]);
+				if (!clonedeck(new->deck + 1, deck[1])) {
+					free(new->deck[0].a);
 					free(new);
 					return -1;
 				}
