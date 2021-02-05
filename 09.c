@@ -8,7 +8,6 @@
 #include <errno.h>
 #include <inttypes.h>
 #include <stdbool.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -26,13 +25,13 @@ hasproperty(const uint64_t *const num, const size_t n)
 }
 
 int
-day09(void)
+day09(FILE * const in)
 {
 	uint64_t num[MAX_LINES];
 	uint64_t invalid = 0;
 	size_t n = 0;
 	int scanres;
-	while ((scanres = scanf("%" SCNu64 "%*1[\n]", num + n)) != EOF) {
+	while ((scanres = fscanf(in, "%" SCNu64 "%*1[\n]", num + n)) != EOF) {
 		if (scanres < 1) {
 			if (errno != 0)
 				perror("Failed to input");
@@ -67,4 +66,3 @@ day09(void)
 	fputs("Weakness not found\n", stderr);
 	return EXIT_FAILURE;
 }
-

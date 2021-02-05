@@ -1,8 +1,14 @@
+/*
+ * This program is free software. It comes without any warranty, to
+ * the extent permitted by applicable law. You can redistribute it
+ * and/or modify it under the terms of the Do What The Fuck You Want
+ * To Public License, Version 2, as published by Sam Hocevar. See
+ * http://www.wtfpl.net/ for more details.
+ */
 #include <errno.h>
 #include <inttypes.h>
 #include <regex.h>
 #include <stdbool.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -158,7 +164,7 @@ freedata(void)
 }
 
 int
-day14(void)
+day14(FILE * const in)
 {
 	if (atexit(freedata) != 0)
 		fputs("Call to `atexit` failed; memory may leak\n", stderr);
@@ -175,7 +181,7 @@ day14(void)
 	uint64_t mask = 0;
 	uint64_t mem[65536] = { 0 };
 	char input[48];
-	while ((res = scanf("%47[^\n]%*1[\n]", input)) == 1) {
+	while ((res = fscanf(in, "%47[^\n]%*1[\n]", input)) == 1) {
 		regmatch_t match[3];
 		if (regexec(&maskreg, input, 0, NULL, 0) == 0) {
 			mask = 0;
@@ -208,4 +214,3 @@ day14(void)
 	printf("Ver 2\t%" PRIu64 "\n", sumtree(head));
 	return EXIT_SUCCESS;
 }
-

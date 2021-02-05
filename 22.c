@@ -81,32 +81,32 @@ parsingerror(const char * const str, const uintmax_t line)
 {
 	if (errno != 0) {
 		char buf[strlen(str) + 10 + DIGITS(uintmax_t)];
-		sprintf(buf, "%s on line %" PRIuMAX, str, line);
+		sprintf(buf, "%s on line %ju", str, line);
 		perror(buf);
 	} else {
-		fprintf(stderr, "%s on line %" PRIuMAX "\n", str, line);
+		fprintf(stderr, "%s on line %ju\n", str, line);
 	}
 }
 
 static uintmax_t
-consumespaces(uintmax_t line)
+consumespaces(FILE * const in, uintmax_t line)
 {
 	int c;
-	while (isspace(c = getchar())) {
+	while (isspace(c = fgetc(in))) {
 		if (c == '\n')
 			line++;
 	}
-	ungetc(c, stdin);
+	ungetc(c, in);
 	return line;
 }
 
 static uintmax_t
-parseplayer(const uint_fast8_t pnum, uintmax_t line)
+parseplayer(FILE * const in, const uint_fast8_t pnum, uintmax_t line)
 {
 	int num;
 	char buf[12];
 	sprintf(buf, "Player %" PRIuFAST8 ":%%n", pnum + 1);
-	scanf(buf, &num);
+	fscanf(in, buf, &num);
 	if (num == 0) {
 		fprintf(stderr, "Invalid player header on line %ju\n", line);
 		exit(EXIT_FAILURE);
@@ -114,8 +114,8 @@ parseplayer(const uint_fast8_t pnum, uintmax_t line)
 	Card *tail = NULL;
 	for (;;) {
 		uintmax_t val;
-		line = consumespaces(line);
-		if (scanf("%ju", &val) < 1)
+		line = consumespaces(in, line);
+		if (fscanf(in, "%ju", &val) < 1)
 			break;
 		Card * const new = malloc(sizeof(Card));
 		if (new == NULL) {
@@ -131,7 +131,7 @@ parseplayer(const uint_fast8_t pnum, uintmax_t line)
 		tail = new;
 		totalcards++;
 	}
-	if (ferror(stdin)) {
+	if (ferror(in)) {
 		parsingerror("Puzzle input failed", line);
 		exit(EXIT_FAILURE);
 	}
@@ -139,10 +139,10 @@ parseplayer(const uint_fast8_t pnum, uintmax_t line)
 }
 
 static bool
-parse(void)
+parse(FILE * const in)
 {
-	parseplayer(1, parseplayer(0, 1));
-	return feof(stdin);
+	parseplayer(in, 1, parseplayer(in, 0, 1));
+	return feof(in);
 }
 
 static uintmax_t
@@ -376,12 +376,12 @@ freedata(void)
 }
 
 int
-day22(void)
+day22(FILE * const in)
 {
 	if (atexit(freedata) != 0)
 		fputs("Call to `atexit` failed; memory may leak\n", stderr);
 	errno = 0;
-	if (!parse()) {
+	if (!parse(in)) {
 		fputs("Did not parse the entire puzzle input\n", stderr);
 		return EXIT_FAILURE;
 	}
@@ -398,4 +398,3 @@ day22(void)
 	printf("Recurs\t%ju\n", score);
 	return EXIT_SUCCESS;
 }
-

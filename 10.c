@@ -7,7 +7,6 @@
  */
 #include <errno.h>
 #include <inttypes.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -27,12 +26,12 @@ compu8(const void *x, const void *y)
 }
 
 int
-day10(void)
+day10(FILE * const in)
 {
 	uint8_t jolts[MAX_LINES];
 	size_t n = 0;
 	int scanres;
-	while ((scanres = scanf("%" SCNu8 "%*1[\n]", jolts + n)) != EOF) {
+	while ((scanres = fscanf(in, "%" SCNu8 "%*1[\n]", jolts + n)) != EOF) {
 		if (scanres < 1) {
 			if (errno != 0)
 				perror("Failed to input");

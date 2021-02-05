@@ -53,12 +53,12 @@ bufappend(size_t x, bool val)
 }
 
 static void
-parseinput(void)
+parseinput(FILE * const in)
 {
 	size_t x = 0;
 	int c;
-	while ((c = getchar()) != EOF) {
-		switch ((char) c) {
+	while ((c = fgetc(in)) != EOF) {
+		switch (c) {
 		case '\n':
 			if (width > 0 && x != width) {
 				fprintf(stderr,
@@ -84,11 +84,11 @@ parseinput(void)
 			bufappend(x++, c == '#');
 			break;
 		default:
-			fprintf(stderr, "Invalid character: %c\n", (char) c);
+			fprintf(stderr, "Invalid character: %c\n", c);
 			exit(EXIT_FAILURE);
 		}
 	}
-	if (ferror(stdin)) {
+	if (ferror(in)) {
 		PRINT_ERR("Input parsing failed");
 		exit(EXIT_FAILURE);
 	}
@@ -266,11 +266,11 @@ freespace(void)
 }
 
 int
-day17(void)
+day17(FILE * const in)
 {
 	if (atexit(freespace) != 0)
 		fputs("Call to `atexit` failed; memory may leak\n", stderr);
-	parseinput();
+	parseinput(in);
 	copypattern();
 	for (uint_fast8_t cycle = 1; cycle <= 6; cycle++) {
 		runcycle();

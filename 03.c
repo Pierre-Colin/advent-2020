@@ -7,7 +7,6 @@
  */
 #include <inttypes.h>
 #include <stdbool.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -47,13 +46,13 @@ advance(Node *node, uint8_t steps)
 }
 
 int
-day03(void)
+day03(FILE * const in)
 {
 	Node *tail = NULL;
 	char input[PATTERN_WIDTH + 2];
 	if (atexit(freelist) != 0)
 		fputs("Call to `atexit` failed; memory may leak\n", stderr);
-	while (fgets(input, PATTERN_WIDTH + 2, stdin) != NULL) {
+	while (fgets(input, PATTERN_WIDTH + 2, in) != NULL) {
 		uint32_t line = 0;
 		for (uint8_t i = 0; i < PATTERN_WIDTH; i++) {
 			switch (input[i]) {

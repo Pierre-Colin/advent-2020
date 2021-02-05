@@ -46,10 +46,10 @@ printlineerror(const char *const str, const uintmax_t line)
 {
 	if (errno != 0) {
 		char buf[strlen(str) + 10 + DIGITS(uintmax_t)];
-		sprintf(buf, "%s on line %" PRIuMAX, str, line);
+		sprintf(buf, "%s on line %ju", str, line);
 		perror(buf);
 	} else {
-		fprintf(stderr, "%s on line %" PRIuMAX "\n", str, line);
+		fprintf(stderr, "%s on line %ju\n", str, line);
 	}
 }
 
@@ -64,34 +64,30 @@ hastile(const uintmax_t num)
 }
 
 static uintmax_t
-parselabel(const uintmax_t line)
+parselabel(FILE * const in, const uintmax_t line)
 {
 	char newline;
 	uintmax_t tilenum;
-	if (scanf("Tile %" SCNuMAX ":%1c", &tilenum, &newline) < 2) {
+	if (fscanf(in, "Tile %ju:%1c", &tilenum, &newline) < 2) {
 		printlineerror("Input failed", line);
 		exit(EXIT_FAILURE);
 	}
 	if (newline != '\n') {
-		fprintf(stderr,
-		        "Mising line break on line %" PRIuMAX "\n",
-		        line);
+		fprintf(stderr, "Mising line break on line %ju\n", line);
 		exit(EXIT_FAILURE);
 	}
 	return tilenum;
 }
 
 static void
-expectnewline(const uintmax_t line, void *const ptr)
+expectnewline(FILE * const in, const uintmax_t line, void *const ptr)
 {
-	char end = getchar();
+	char end = fgetc(in);
 	if (end != EOF && end != '\n') {
-		fprintf(stderr,
-			"Expected new line on line %" PRIuMAX "\n",
-			line);
+		fprintf(stderr, "Expected new line on line %ju\n", line);
 		free(ptr);
 		exit(EXIT_FAILURE);
-	} else if (ferror(stdin)) {
+	} else if (ferror(in)) {
 		printlineerror("Input failed", line);
 		free(ptr);
 		exit(EXIT_FAILURE);
@@ -99,29 +95,28 @@ expectnewline(const uintmax_t line, void *const ptr)
 }
 
 static void
-filltileline(const uintmax_t line,
-              const char *restrict const format,
-              bool *restrict const tile,
-              const size_t l)
+filltileline(FILE * const in,
+             const uintmax_t line,
+             const char *restrict const format,
+             bool *restrict const tile,
+             const size_t l)
 {
 	char buf[tilesz + 1];
 	char newline;
-	const int result = scanf(format, buf, &newline);
-	if ((result < 2 && !feof(stdin)) || result < 1) {
+	const int result = fscanf(in, format, buf, &newline);
+	if ((result < 2 && !feof(in)) || result < 1) {
 		printlineerror("Input failed", line);
 		free(tile);
 		exit(EXIT_FAILURE);
-	} else if (newline != '\n' && !feof(stdin)) {
-		fprintf(stderr,
-		        "Missing line break on line %" PRIuMAX "\n",
-		        line);
+	} else if (newline != '\n' && !feof(in)) {
+		fprintf(stderr, "Missing line break on line %ju\n", line);
 		free(tile);
 		exit(EXIT_FAILURE);
 	}
 	for (size_t i = 0; i < tilesz; i++) {
 		if (buf[i] == 0) {
 			fprintf(stderr,
-			        "Inconsistent width on line %" PRIuMAX "\n",
+			        "Inconsistent width on line %ju\n",
 			        line);
 			free(tile);
 			exit(EXIT_FAILURE);
@@ -131,19 +126,19 @@ filltileline(const uintmax_t line,
 }
 
 static bool *
-parsetile(uintmax_t *const line)
+parsetile(FILE * const in, uintmax_t *const line)
 {
 	static char format[8 + DIGITS(size_t)];
 	bool *tile = NULL;
 	if (tilesz == 0) {
 		char *input;
 		char newline;
-		if (scanf("%m[.#]%1c", &input, &newline) < 2) {
+		if (fscanf(in, "%m[.#]%1c", &input, &newline) < 2) {
 			printlineerror("Input failed", *line);
 			exit(EXIT_FAILURE);
 		} else if (newline != '\n') {
 			fprintf(stderr,
-			        "Bad input format on line %" PRIuMAX "\n",
+			        "Bad input format on line %ju\n",
 			        *line);
 			free(input);
 			exit(EXIT_FAILURE);
@@ -164,38 +159,36 @@ parsetile(uintmax_t *const line)
 			printlineerror("Allocation failed", *line);
 			exit(EXIT_FAILURE);
 		}
-		filltileline((*line)++, format, tile, 0);
+		filltileline(in, (*line)++, format, tile, 0);
 	}
 	for (size_t l = 1; l < tilesz; l++)
-		filltileline((*line)++, format, tile, l);
-	expectnewline(*line, tile);
+		filltileline(in, (*line)++, format, tile, l);
+	expectnewline(in, *line, tile);
 	return tile;
 }
 
 static bool
-keepparsing(void)
+keepparsing(FILE * const in)
 {
-	const char c = getchar();
+	const char c = fgetc(in);
 	if (c != EOF)
-		ungetc(c, stdin);
+		ungetc(c, in);
 	return c != EOF;
 }
 
 static void
-parse(void)
+parse(FILE * const in)
 {
 	Tile *tail = NULL, *tile;
 	uintmax_t line = 1, num = 0;
-	while (keepparsing()) {
+	while (keepparsing(in)) {
 		errno = 0;
-		num = parselabel(line++);
+		num = parselabel(in, line++);
 		if (hastile(num)) {
-			fprintf(stderr,
-			        "Tile %" PRIuMAX " appears twice\n",
-			        num);
+			fprintf(stderr, "Tile %ju appears twice\n", num);
 			exit(EXIT_FAILURE);
 		}
-		bool *const tiledata = parsetile(&line);
+		bool *const tiledata = parsetile(in, &line);
 		if ((tile = malloc(sizeof(Tile))) == NULL) {
 			printlineerror("Allocation failed", line);
 			free(tile);
@@ -235,9 +228,7 @@ checkperfectsquare(void)
 		num++;
 	jigsawsz = isqrt(num);
 	if (jigsawsz * jigsawsz != num) {
-		fprintf(stderr,
-		        "Number of tiles (%" PRIuMAX ") is not a square\n",
-		        num);
+		fprintf(stderr, "Number of tiles (%ju) is not a square\n", num);
 		exit(EXIT_FAILURE);
 	}
 }
@@ -525,12 +516,12 @@ freepieces(void)
 }
 
 int
-day20(void)
+day20(FILE * const in)
 {
 	if (atexit(freepieces) != 0)
 		fputs("Call to `atexit` failed; memory may leak\n", stderr);
-	parse();
-	if (!feof(stdin))
+	parse(in);
+	if (!feof(in))
 		return EXIT_FAILURE;
 	checkperfectsquare();
 	Slot jigsaw[jigsawsz][jigsawsz];
@@ -555,4 +546,3 @@ day20(void)
 	printf("Rough\t%" PRIuMAX "\n", roughness(image));
 	return EXIT_SUCCESS;
 }
-

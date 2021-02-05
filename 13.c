@@ -7,7 +7,6 @@
  */
 #include <errno.h>
 #include <inttypes.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -92,14 +91,14 @@ printinerr(void)
 }
 
 static void
-retryinput(uint64_t *const rem)
+retryinput(FILE * const in, uint64_t *const rem)
 {
 	if (errno != 0) {
 		perror("Input failed");
 		exit(EXIT_FAILURE);
 	}
 	char c[2];
-	if (scanf("%1[x]%*1[,\n]", c) != 1) {
+	if (fscanf(in, "%1[x]%*1[,\n]", c) != 1) {
 		printinerr();
 		exit(EXIT_FAILURE);
 	}
@@ -118,13 +117,13 @@ freelist(void)
 }
 
 int
-day13(void)
+day13(FILE * const in)
 {
 	if (atexit(freelist) != 0)
 		fputs("Call to `atexit` failed; memory may leak\n", stderr);
 	uint64_t mindep;
 	int scanres;
-	if ((scanres = scanf("%" SCNu64 "%*1[\n]", &mindep)) != 1) {
+	if ((scanres = fscanf(in, "%" SCNu64 "%*1[\n]", &mindep)) != 1) {
 		printinerr();
 		return EXIT_FAILURE;
 	}
@@ -132,9 +131,9 @@ day13(void)
 	uint64_t rem = 0;
 	Node *tail = NULL;
 	uint64_t bus;
-	while ((scanres = scanf("%" SCNu64 "%*1[,\n]", &bus)) != EOF) {
+	while ((scanres = fscanf(in, "%" SCNu64 "%*1[,\n]", &bus)) != EOF) {
 		if (scanres < 1) {
-			retryinput(&rem);
+			retryinput(in, &rem);
 			continue;
 		}
 		if (bus == 0) {
@@ -183,4 +182,3 @@ day13(void)
 	printf("Chinese\t%" PRIu64 "\n", head->rem);
 	return EXIT_SUCCESS;
 }
-

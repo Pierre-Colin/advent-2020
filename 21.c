@@ -126,21 +126,21 @@ parseerror(const uintmax_t line, const char * const str)
 {
 	if (errno != 0) {
 		char buf[strlen(str) + 9 + DIGITS(uintmax_t)];
-		sprintf(buf, "%s on line %" PRIuMAX, str, line);
+		sprintf(buf, "%s on line %ju", str, line);
 		perror(buf);
 	} else {
-		fprintf(stderr, "%s on line %" PRIuMAX "\n", str, line);
+		fprintf(stderr, "%s on line %ju\n", str, line);
 	}
 }
 
 static List *
-parseing(bool * const hasag)
+parseing(FILE * const in, bool * const hasag)
 {
 	List *ihead = NULL, *itail = NULL;
 	char *input;
 	char space;
 	int result;
-	while ((result = scanf("%m[a-z]%1c", &input, &space)) >= 1) {
+	while ((result = fscanf(in, "%m[a-z]%1c", &input, &space)) >= 1) {
 		const char *sing = addstr(input, &ingarr, &cingarr, &singarr);
 		if (sing == NULL) {
 			freelist(ihead);
@@ -164,7 +164,7 @@ parseing(bool * const hasag)
 				freelist(ihead);
 				return NULL;
 			}
-		} else if (result == 1 && feof(stdin)) {
+		} else if (result == 1 && feof(in)) {
 			return ihead;
 		} else {
 			freelist(ihead);
@@ -172,13 +172,13 @@ parseing(bool * const hasag)
 		}
 		itail = new;
 	}
-	if (ferror(stdin)) {
+	if (ferror(in)) {
 		freelist(ihead);
 		return NULL;
-	} else if (feof(stdin)) {
+	} else if (feof(in)) {
 		return ihead;
 	}
-	const int c = getchar();
+	const int c = fgetc(in);
 	*hasag = c == '(';
 	if (c == '(' || c == EOF) {
 		return ihead;
@@ -189,9 +189,9 @@ parseing(bool * const hasag)
 }
 
 static int
-keepparsingag(void)
+keepparsingag(FILE * const in)
 {
-	const int c = getchar();
+	const int c = fgetc(in);
 	if (c == ',')
 		return 1;
 	if (c == ')')
@@ -200,10 +200,10 @@ keepparsingag(void)
 }
 
 static bool
-parseag(List ** const agref)
+parseag(FILE * const in, List ** const agref)
 {
 	char *input;
-	if (scanf("contains %m[a-z]", &input) < 1)
+	if (fscanf(in, "contains %m[a-z]", &input) < 1)
 		return false;
 	const char *sag = addstr(input, &agarr, &cagarr, &sagarr);
 	if (sag == NULL)
@@ -215,8 +215,8 @@ parseag(List ** const agref)
 	ahead->next = NULL;
 	List *atail = ahead;
 	int result;
-	while ((result = keepparsingag()) > 0) {
-		if (scanf(" %m[a-z]", &input) < 1) {
+	while ((result = keepparsingag(in)) > 0) {
+		if (fscanf(in, " %m[a-z]", &input) < 1) {
 			freelist(ahead);
 			return false;
 		}
@@ -235,7 +235,7 @@ parseag(List ** const agref)
 		atail = new;
 	}
 	if (result == 0) {
-		const int next = getchar();
+		const int next = fgetc(in);
 		if (next == '\n' || next == EOF) {
 			*agref = ahead;
 			return true;
@@ -246,24 +246,24 @@ parseag(List ** const agref)
 }
 
 static bool
-keepparsing(void)
+keepparsing(FILE * const in)
 {
-	const int c = getchar();
+	const int c = fgetc(in);
 	if (c == EOF)
 		return false;
-	ungetc(c, stdin);
+	ungetc(c, in);
 	return true;
 }
 
 static void
-parse(void)
+parse(FILE * const in)
 {
 	uintmax_t line = UINTMAX_C(1);
 	Food *fdtail = NULL;
 	errno = 0;
-	while (keepparsing()) {
+	while (keepparsing(in)) {
 		bool hasag = false;
-		List * const ing = parseing(&hasag);
+		List * const ing = parseing(in, &hasag);
 		if (ing == NULL) {
 			parseerror(line, "Could not parse ingredients");
 			exit(EXIT_FAILURE);
@@ -279,7 +279,7 @@ parse(void)
 		new->next = NULL;
 		if (hasag) {
 			List *ag;
-			if (!parseag(&ag)) {
+			if (!parseag(in, &ag)) {
 				parseerror(line, "Could not parse allergens");
 				freelist(ing);
 				exit(EXIT_FAILURE);
@@ -403,12 +403,12 @@ freedata(void)
 }
 
 int
-day21(void)
+day21(FILE * const in)
 {
 	if (atexit(freedata) != 0)
 		fputs("Call to `atexit` failed; memory may leak\n", stderr);
 	errno = 0;
-	parse();
+	parse(in);
 	convert();
 	bool inghasag[singarr][sagarr];
 	for (size_t ing = 0; ing < singarr; ing++) {
@@ -420,4 +420,3 @@ day21(void)
 	printinglist(inghasag);
 	return EXIT_FAILURE;
 }
-

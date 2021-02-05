@@ -91,14 +91,15 @@ unexpectedchar(const uintmax_t line, const int c)
 }
 
 static void
-movevertically(const uintmax_t line,
+movevertically(FILE * const in,
+               const uintmax_t line,
                size_t * const x,
                size_t * const y,
                const int_fast8_t dir)
 {
 	int c;
 	*y = ((*y == 0 || *y == height - 1)? doubleheight(*y) : *y) + dir;
-	if ((c = getchar()) == EOF && feof(stdin)) {
+	if ((c = fgetc(in)) == EOF && feof(in)) {
 		fprintf(stderr, "Input ends prematurely on line %ju\n", line);
 		exit(EXIT_FAILURE);
 	} else if (c == '\n') {
@@ -115,23 +116,23 @@ movevertically(const uintmax_t line,
 }
 
 static void
-parse(void)
+parse(FILE * const in)
 {
 	uintmax_t line = 1;
-	while (!feof(stdin) && !ferror(stdin)) {
+	while (!feof(in) && !ferror(in)) {
 		size_t x = refx, y = refy;
 		bool nonempty = false;
 		int c;
-		while ((c = getchar()) != EOF && c != '\n') {
+		while ((c = fgetc(in)) != EOF && c != '\n') {
 			nonempty = true;
 			if (c == 'w') {
 				x = (x == 0? doublewidth(x) : x) - 1;
 			} else if (c == 'e') {
 				x = (x == width - 1? doublewidth(x) : x) + 1;
 			} else if (c == 'n') {
-				movevertically(line, &x, &y, -1);
+				movevertically(in, line, &x, &y, -1);
 			} else if (c == 's') {
-				movevertically(line, &x, &y, 1);
+				movevertically(in, line, &x, &y, 1);
 			} else {
 				unexpectedchar(line, c);
 				exit(EXIT_FAILURE);
@@ -210,7 +211,7 @@ freetiles(void)
 }
 
 int
-day24(void)
+day24(FILE * const in)
 {
 	if (atexit(freetiles) != 0)
 		fputs("Call to `atexit` failed; memory may leak\n", stderr);
@@ -220,8 +221,8 @@ day24(void)
 		return EXIT_FAILURE;
 	}
 	tile[0] = false;
-	parse();
-	if (ferror(stdin)) {
+	parse(in);
+	if (ferror(in)) {
 		fputs("Puzzle input parsing failed\n", stderr);
 		return EXIT_FAILURE;
 	}
@@ -231,4 +232,3 @@ day24(void)
 	printf("Day 100\t%ju\n", countblacktiles());
 	return EXIT_SUCCESS;
 }
-

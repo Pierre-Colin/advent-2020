@@ -69,7 +69,7 @@ freenum(void)
 }
 
 int
-day15(void)
+day15(FILE * const in)
 {
 	if (atexit(freenum) != 0)
 		fputs("Call to `atexit` failed; memory may leak\n", stderr);
@@ -77,19 +77,19 @@ day15(void)
 	size_t input, last = SIZE_MAX;
 	int scanres;
 	errno = 0;
-	while ((scanres = scanf("%zu", &input)) == 1) {
+	while ((scanres = fscanf(in, "%zu", &input)) == 1) {
 		if (!speak(input, turn++)) {
 			PRINT_ERR("Could not speak a starting number");
 			return EXIT_FAILURE;
 		}
-		const int next = getchar();
+		const int next = fgetc(in);
 		if (next != ',' && next != '\n' && next != EOF) {
 			fprintf(stderr, "Unexpected character: %c\n", next);
 			return EXIT_FAILURE;
 		}
 		last = input;
 	}
-	if (!feof(stdin)) {
+	if (!feof(in)) {
 		PRINT_ERR("Error occured during puzzle input parsing");
 		return EXIT_FAILURE;
 	}
@@ -105,4 +105,3 @@ day15(void)
 	printf("30Mth\t%zu\n", last);
 	return EXIT_SUCCESS;
 }
-

@@ -7,7 +7,6 @@
  */
 #include <errno.h>
 #include <inttypes.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -41,7 +40,7 @@ rcos(uint64_t n)
 }
 
 int
-day12(void)
+day12(FILE * const in)
 {
 	int64_t xa = 0, ya = 0;
 	int64_t xb = 0, yb = 0;
@@ -50,7 +49,7 @@ day12(void)
 	char action;
 	uint16_t value;
 	int scanres;
-	while ((scanres = scanf("%c%" SCNu16 "%*1[\n]", &action, &value))
+	while ((scanres = fscanf(in, "%c%" SCNu16 "%*1[\n]", &action, &value))
 	       != EOF) {
 		if (scanres < 2) {
 			if (errno != 0)
@@ -105,4 +104,3 @@ day12(void)
 	printf("Waypt\t%" PRIi64 "\n", ABS(xb) + ABS(yb));
 	return EXIT_SUCCESS;
 }
-

@@ -12,16 +12,16 @@
 #include <stdlib.h>
 
 static void
-checkeof(void)
+checkeof(FILE * const in)
 {
 	int c;
-	while ((c = getchar()) != EOF) {
+	while ((c = fgetc(in)) != EOF) {
 		if (!isspace(c)) {
 			fprintf(stderr, "Unexpected character: %c\n", c);
 			exit(EXIT_FAILURE);
 		}
 	}
-	if (!feof(stdin)) {
+	if (!feof(in)) {
 		fputs("Puzzle input parsing failed\n", stderr);
 		exit(EXIT_FAILURE);
 	}
@@ -48,18 +48,18 @@ findloop(const uintmax_t key)
 }
 
 int
-day25(void)
+day25(FILE * const in)
 {
 	uintmax_t doork, cardk;
 	errno = 0;
-	if (scanf("%ju%*[ \n\t]%ju", &doork, &cardk) < 2) {
+	if (fscanf(in, "%ju%*[ \n\t]%ju", &doork, &cardk) < 2) {
 		if (errno != 0)
 			perror("Puzzle input parsing failed");
 		else
 			fputs("Bad puzzle input\n", stderr);
 		return EXIT_FAILURE;
 	}
-	checkeof();
+	checkeof(in);
 	printf("Key\t%ju\n", transform(cardk, findloop(doork)));
 	return EXIT_SUCCESS;
 }

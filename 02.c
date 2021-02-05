@@ -12,7 +12,7 @@
 #include <stdlib.h>
 
 int
-day02(void)
+day02(FILE * const in)
 {
 	uint8_t low, high;
 	char c;
@@ -20,11 +20,12 @@ day02(void)
 	int matched;
 	uint16_t numbers = 0;
 	uint16_t positions = 0;
-	while ((matched = scanf("%" SCNu8 "-%" SCNu8 " %c: %31s\n",
-	                        &low,
-	                        &high,
-	                        &c,
-	                        password)) == 4)
+	while ((matched = fscanf(in,
+	                         "%" SCNu8 "-%" SCNu8 " %c: %31s\n",
+	                         &low,
+	                         &high,
+	                         &c,
+	                         password)) == 4)
 	{
 		uint8_t occurences = 0;
 		for (const char *it = password; *it != 0; it++) {

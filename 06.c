@@ -7,7 +7,6 @@
  */
 #include <errno.h>
 #include <inttypes.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -26,7 +25,7 @@ updatetotals(const uint32_t *const anyone,
 }
 
 int
-day06(void)
+day06(FILE * const in)
 {
 	uint64_t atotal = 0;
 	uint64_t etotal = 0;
@@ -34,12 +33,12 @@ day06(void)
 	uint32_t everyone = 0x03ffffff;
 	char input[27];
 	int scanres;
-	while ((scanres = scanf("%26[a-z]%*1[\n]", input)) != EOF) {
+	while ((scanres = fscanf(in, "%26[a-z]%*1[\n]", input)) != EOF) {
 		if (scanres < 1) {
 			if (errno != 0) {
 				perror("Failed to parse input");
 				return EXIT_FAILURE;
-			} else if (getchar() == '\n') {
+			} else if (fgetc(in) == '\n') {
 				updatetotals(&anyone,
 				             &atotal,
 				             &everyone,

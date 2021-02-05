@@ -92,11 +92,11 @@ stars(const uint_fast32_t ncups,
 }
 
 int
-day23(void)
+day23(FILE * const in)
 {
 	uint_fast8_t cups[9], ncups = 0;
 	int c;
-	while ((c = getchar()) != EOF && ncups <= 9) {
+	while ((c = fgetc(in)) != EOF && ncups <= 9) {
 		if (isspace(c))
 			continue;
 		if (!isdigit(c)) {
@@ -105,7 +105,7 @@ day23(void)
 		}
 		cups[ncups++] = c - '0';
 	}
-	if (ferror(stdin) || !feof(stdin)) {
+	if (ferror(in) || !feof(in)) {
 		fputs("Puzzle input parsing failed\n", stderr);
 		return EXIT_FAILURE;
 	}
@@ -128,4 +128,3 @@ day23(void)
 	printf("Stars\t%" PRIuFAST64 "\n", stars(ncups, cups));
 	return EXIT_SUCCESS;
 }
-

@@ -10,7 +10,6 @@
 #include <limits.h>
 #include <regex.h>
 #include <stdbool.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -292,11 +291,11 @@ freerules(RuleTree *set)
 }
 
 static bool
-isemptyline(void)
+isemptyline(FILE * const in)
 {
-	const int c = getchar();
+	const int c = fgetc(in);
 	if (c != '\n' && c != EOF)
-		ungetc(c, stdin);
+		ungetc(c, in);
 	return c == '\n' || c == EOF;
 }
 
@@ -306,10 +305,10 @@ printinputfailed(const uintmax_t line)
 	if (errno != 0) {
 		const size_t sz = 22 + DIGITS(uintmax_t);
 		char buf[sz];
-		sprintf(buf, "Input failed on line %" PRIuMAX, line);
+		sprintf(buf, "Input failed on line %ju", line);
 		perror(buf);
 	} else {
-		fprintf(stderr, "Bad input on line %" PRIuMAX "\n", line);
+		fprintf(stderr, "Bad input on line %ju\n", line);
 	}
 }
 
@@ -320,13 +319,11 @@ printallocationerror(const uintmax_t line)
 		const int temp = errno;
 		const size_t sz = 27 + DIGITS(uintmax_t);
 		char buf[sz];
-		sprintf(buf, "Allocation failed on line %" PRIuMAX, line);
+		sprintf(buf, "Allocation failed on line %ju", line);
 		errno = temp;
 		perror(buf);
 	} else {
-		fprintf(stderr,
-		        "Allocation failed on line " "%" PRIuMAX "\n",
-		        line);
+		fprintf(stderr, "Allocation failed on line %ju\n", line);
 	}
 }
 
@@ -390,16 +387,16 @@ parsesequencerule(char *str)
 }
 
 static bool
-parsegrammar(regex_t *greg, const uintmax_t line)
+parsegrammar(FILE * const in, regex_t *greg, const uintmax_t line)
 {
 	uintmax_t num;
 	char *input;
 	errno = 0;
-	if (scanf("%" SCNuMAX ": %m[^\n]%*1[\n]", &num, &input) == 2) {
+	if (fscanf(in, "%ju: %m[^\n]%*1[\n]", &num, &input) == 2) {
 		regmatch_t match[3];
 		if (regexec(greg, input, 3, match, 0) != 0) {
 			fprintf(stderr,
-			        "Line %" PRIuMAX " doesn't match: %s\n",
+			        "Line %ju doesn't match: %s\n",
 			        line,
 			        input);
 			free(input);
@@ -441,11 +438,11 @@ parsegrammar(regex_t *greg, const uintmax_t line)
 }
 
 static bool
-parsemessage(const uintmax_t line, Message **tail)
+parsemessage(FILE * const in, const uintmax_t line, Message **tail)
 {
 	char *input;
 	errno = 0;
-	if (scanf("%m[ab]%*1[\n]", &input) == 1) {
+	if (fscanf(in, "%m[ab]%*1[\n]", &input) == 1) {
 		errno = 0;
 		Message *new = malloc(sizeof(Message));
 		if (new == NULL) {
@@ -453,14 +450,12 @@ parsemessage(const uintmax_t line, Message **tail)
 				const size_t sz = 35 + DIGITS(uintmax_t);
 				char buf[sz];
 				sprintf(buf,
-				        "Message allocation failed on line "
-				        "%" PRIuMAX,
+				        "Allocation failed on line %ju",
 				        line);
 				perror(buf);
 			} else {
 				fprintf(stderr,
-				        "Message allocation failed on line "
-				        "%" PRIuMAX "\n",
+				        "Allocation failed on line %ju\n",
 				        line);
 			}
 			free(input);
@@ -481,7 +476,7 @@ parsemessage(const uintmax_t line, Message **tail)
 }
 
 static void
-parse(void)
+parse(FILE * const in)
 {
 	regex_t greg;
 	int result = regcomp(&greg, GRAMMAR_REGEX, REG_EXTENDED);
@@ -501,21 +496,21 @@ parse(void)
 	Message *msgtail = NULL;
 	ParseState state = GRAMMAR;
 	uintmax_t line = 0;
-	while (!feof(stdin) && !ferror(stdin)) {
+	while (!feof(in) && !ferror(in)) {
 		line++;
-		if (isemptyline()) {
+		if (isemptyline(in)) {
 			state = MESSAGES;
 			continue;
 		}
 		switch (state) {
 		case GRAMMAR:
-			if (!parsegrammar(&greg, line)) {
+			if (!parsegrammar(in, &greg, line)) {
 				regfree(&greg);
 				exit(EXIT_FAILURE);
 			}
 			break;
 		case MESSAGES:
-			if (!parsemessage(line, &msgtail)) {
+			if (!parsemessage(in, line, &msgtail)) {
 				regfree(&greg);
 				exit(EXIT_FAILURE);
 			}
@@ -589,12 +584,12 @@ freedata(void)
 }
 
 int
-day19(void)
+day19(FILE * const in)
 {
 	if (atexit(freedata) != 0)
 		fputs("Call to `atexit` failed; memory may leak\n", stderr);
-	parse();
-	if (!feof(stdin)) {
+	parse(in);
+	if (!feof(in)) {
 		fputs("Errors happened while parsing puzzle input\n", stderr);
 		return EXIT_FAILURE;
 	}
@@ -604,4 +599,3 @@ day19(void)
 	printf("Fixed\t%" PRIuMAX "\n", countmatches());
 	return EXIT_SUCCESS;
 }
-

@@ -8,7 +8,6 @@
 #include <errno.h>
 #include <inttypes.h>
 #include <stdbool.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -209,7 +208,7 @@ countoccupied(const size_t width)
 }
 
 int
-day11(void)
+day11(FILE * const in)
 {
 	if (atexit(freelist) != 0)
 		fputs("Call to `atexit` failed; memory may leak\n", stderr);
@@ -217,7 +216,7 @@ day11(void)
 	size_t width = 0;
 	char *input;
 	int scanres;
-	while ((scanres = scanf("%m[.L]%*1[\n]", &input)) != EOF) {
+	while ((scanres = fscanf(in, "%m[.L]%*1[\n]", &input)) != EOF) {
 		if (scanres < 1) {
 			if (errno != 0)
 				perror("Input failed");
@@ -272,4 +271,3 @@ day11(void)
 	printf("Seen\t%" PRIu64 "\n", countoccupied(width));
 	return EXIT_SUCCESS;
 }
-

@@ -9,7 +9,6 @@
 #include <inttypes.h>
 #include <regex.h>
 #include <stdbool.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -215,7 +214,7 @@ tryregcomp(regex_t *const pattern, const char *const regex)
 }
 
 int
-day07(void)
+day07(FILE * const in)
 {
 	char *input;
 	if (atexit(freedata) != 0)
@@ -223,7 +222,7 @@ day07(void)
 	tryregcomp(&inputpattern, "^([a-z ]+) bags contain ([0-9a-z ,]+)\\.$");
 	tryregcomp(&listpattern, "^([0-9]+) (([a-z ])+) bags?(, |\\.)");
 	int scanres;
-	while ((scanres = scanf("%m[0-9a-z ,.]%*1[\n]", &input)) != EOF) {
+	while ((scanres = fscanf(in, "%m[0-9a-z ,.]%*1[\n]", &input)) != EOF) {
 		if (scanres < 1) {
 			fputs("Bad input format\n", stderr);
 			return EXIT_FAILURE;

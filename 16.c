@@ -10,7 +10,6 @@
 #include <inttypes.h>
 #include <regex.h>
 #include <stdbool.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -55,11 +54,11 @@ static Node *tickets = NULL;
 static regex_t defreg;
 
 static int
-getline(char **input)
+getline(FILE * const in, char **input)
 {
 	errno = 0;
-	scanf("%*[ \t\n]");
-	return scanf("%m[^\n]", input);
+	fscanf(in, "%*[ \t\n]");
+	return fscanf(in, "%m[^\n]", input);
 }
 
 static bool
@@ -223,14 +222,14 @@ parsenearbyticket(const char *input, Node **tail, uintmax_t *tser)
 }
 
 static uintmax_t
-parseinput(void)
+parseinput(FILE * const in)
 {
 	Node *tail = NULL;
 	ParseState state = CONSTRAINTS;
 	uintmax_t tser = 0;
 	char *input;
 	int result;
-	while ((result = getline(&input)) == 1) {
+	while ((result = getline(in, &input)) == 1) {
 		switch (state) {
 		case CONSTRAINTS:
 			if (strcmp(input, "your ticket:") == 0) {
@@ -363,7 +362,7 @@ freedata(void)
 }
 
 int
-day16(void)
+day16(FILE * const in)
 {
 	if (atexit(freedata) != 0)
 		fputs("Call to `atexit` failed; memory may leak\n", stderr);
@@ -377,7 +376,7 @@ day16(void)
 		fprintf(stderr, "Could not compile regex: %s\n", buf);
 		return EXIT_FAILURE;
 	}
-	printf("TSER\t%" PRIuMAX "\n", parseinput());
+	printf("TSER\t%" PRIuMAX "\n", parseinput(in));
 	sortfields();
 	printf("Depart\t%" PRIuMAX "\n", proddepart());
 	return EXIT_SUCCESS;

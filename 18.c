@@ -9,7 +9,6 @@
 #include <errno.h>
 #include <inttypes.h>
 #include <stdbool.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -145,15 +144,15 @@ emitop(Node **acc, Node **ops, TokenType op)
 }
 
 static bool
-nexttok(Token *tok)
+nexttok(FILE * const in, Token *tok)
 {
 	int c;
 	errno = 0;
-	while ((c = getchar()) == ' ');
-	ungetc(c, stdin);
+	while ((c = fgetc(in)) == ' ');
+	ungetc(c, in);
 	if (isdigit(c)) {
 		tok->type = NUMBER;
-		return scanf("%" SCNuMAX, &tok->val) == 1;
+		return fscanf(in, "%ju", &tok->val) == 1;
 	}
 	switch (c) {
 	case EOF:
@@ -178,7 +177,7 @@ nexttok(Token *tok)
 		errno = EDOM;
 		return false;
 	}
-	getchar();
+	fgetc(in);
 	return true;
 }
 
@@ -215,7 +214,8 @@ flatapplyop(uintmax_t *res, uintmax_t val, TokenType type)
 }
 
 static bool
-subexpr(uintmax_t level,
+subexpr(FILE * const in,
+        uintmax_t level,
         uintmax_t line,
         uintmax_t *flatres,
         uintmax_t *stackres)
@@ -226,7 +226,7 @@ subexpr(uintmax_t level,
 	Node *acc = NULL, *ops = NULL;
 	do {
 		uintmax_t subvalflat = 0, subvalstack = 0;
-		if (!nexttok(&t))
+		if (!nexttok(in, &t))
 			freeandexit(acc, ops);
 		if (badtoken(pos++, t.type)) {
 			fprintf(stderr,
@@ -235,7 +235,7 @@ subexpr(uintmax_t level,
 			freeandexit(acc, ops);
 		}
 		if (t.type == POPEN
-		    && !subexpr(level + 1, line, &subvalflat, &subvalstack))
+		    && !subexpr(in, level + 1, line, &subvalflat, &subvalstack))
 			freeandexit(acc, ops);
 		if (t.type == NUMBER)
 			subvalflat = subvalstack = t.val;
@@ -273,11 +273,11 @@ subexpr(uintmax_t level,
 }
 
 static bool
-parseexpr(uintmax_t *line, uintmax_t *flatacc, uintmax_t *stackacc)
+parseexpr(FILE *in, uintmax_t *line, uintmax_t *flatacc, uintmax_t *stackacc)
 {
 	errno = 0;
 	uintmax_t flatres = 0, stackres = 0;
-	const bool cont = subexpr(0, *line, &flatres, &stackres);
+	const bool cont = subexpr(in, 0, *line, &flatres, &stackres);
 	if (!cont || errno != 0)
 		return false;
 	if (addwilloverflow(*flatacc, flatres))
@@ -291,12 +291,12 @@ parseexpr(uintmax_t *line, uintmax_t *flatacc, uintmax_t *stackacc)
 }
 
 int
-day18(void)
+day18(FILE * const in)
 {
 	uintmax_t line = 1;
 	uintmax_t flatacc = 0, stackacc = 0;
-	while (parseexpr(&line, &flatacc, &stackacc));
-	if (ferror(stdin) || errno != 0) {
+	while (parseexpr(in, &line, &flatacc, &stackacc));
+	if (ferror(in) || errno != 0) {
 		char buf[64];
 		snprintf(buf, 64, "Bad input on line %" PRIuMAX, line);
 		if (errno != 0)
@@ -309,4 +309,3 @@ day18(void)
 	printf("Stack\t%" PRIuMAX "\n", stackacc);
 	return EXIT_SUCCESS;
 }
-

@@ -31,14 +31,14 @@ freelist(void)
 }
 
 int
-day01(void)
+day01(FILE * const in)
 {
 	if (atexit(freelist) != 0)
 		fputs("Call to `atexit` failed; memory may leak\n", stderr);
 	Node *tail = NULL;
 	int inputerr;
 	uint16_t input;
-	while ((inputerr = scanf("%" SCNu16 "\n", &input)) == 1) {
+	while ((inputerr = fscanf(in, "%" SCNu16 "\n", &input)) == 1) {
 		Node *node = malloc(sizeof(Node));
 		if (node == NULL) {
 			perror("Failed to allocate node");

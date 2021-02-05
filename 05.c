@@ -8,7 +8,6 @@
 #include <errno.h>
 #include <inttypes.h>
 #include <stdbool.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -32,13 +31,13 @@ parseseatpart(uint16_t *const id,
 }
 
 int
-day05(void)
+day05(FILE * const in)
 {
 	uint16_t highest = 0;
 	uint8_t present[128] = { 0 };
 	char input[11];
 	int scanres;
-	while ((scanres = scanf("%10[FBLR]\n", input)) != EOF) {
+	while ((scanres = fscanf(in, "%10[FBLR]\n", input)) != EOF) {
 		if (scanres < 1) {
 			if (errno != 0)
 				perror("Failed to input boarding pass");

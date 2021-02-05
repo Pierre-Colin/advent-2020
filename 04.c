@@ -10,7 +10,6 @@
 #include <inttypes.h>
 #include <regex.h>
 #include <stdbool.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -65,7 +64,7 @@ tryfields(const char *name, const char *value, uint8_t *fields, bool *error)
 }
 
 int
-day04(void)
+day04(FILE * const in)
 {
 	if (atexit(freefields) != 0)
 		fputs("Call to `atexit` failed; memory may leak\n", stderr);
@@ -84,12 +83,10 @@ day04(void)
 	char field[4];
 	uint8_t fields = 0;
 	bool error = false;
-	int scanres;
-	uint64_t present = 0;
-	uint64_t valid = 0;
+	uint64_t present = 0, valid = 0;
 	char *value;
-	while ((scanres = scanf("%3[a-z]:%m[#0-9a-z]", field, &value)) != EOF) {
-		if (scanres != 2) {
+	while (!feof(in) && !ferror(in)) {
+		if (fscanf(in, "%3[a-z]:%m[#0-9a-z]", field, &value) != 2) {
 			if (errno != 0)
 				perror("Failed to read from standard input");
 			else
@@ -101,11 +98,11 @@ day04(void)
 		int end;
 		size_t lines = 0;
 		do {
-			end = getchar();
+			end = fgetc(in);
 			if (end == '\n')
 				lines++;
 		} while (isspace(end));
-		ungetc(end, stdin);
+		ungetc(end, in);
 		if (lines > 1) {
 			checkpassport(&fields, error, &present, &valid);
 			fields = 0;
@@ -117,4 +114,3 @@ day04(void)
 	printf("Valid\t%" PRIu64 "\n", valid);
 	return EXIT_SUCCESS;
 }
-

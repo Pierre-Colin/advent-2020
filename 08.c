@@ -8,7 +8,6 @@
 #include <errno.h>
 #include <inttypes.h>
 #include <regex.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -127,7 +126,7 @@ subsrun(Instruction *const instructions,
 }
 
 int
-day08(void)
+day08(FILE * const in)
 {
 	if (atexit(freedata) != 0)
 		fputs("Call to `atexit` failed; memory may leak\n", stderr);
@@ -143,7 +142,7 @@ day08(void)
 	Instruction instructions[MAX_LINES];
 	size_t ninstr = 0;
 	char input[17];
-	while ((res = scanf("%16[acjmnop 0-9+-]%*1[\n]", input)) != EOF) {
+	while ((res = fscanf(in, "%16[acjmnop 0-9+-]%*1[\n]", input)) != EOF) {
 		if (res < 1) {
 			if (errno != 0)
 				perror("Falied to read input");
@@ -190,4 +189,3 @@ day08(void)
 	fputs("All substitutions loop\n", stderr);
 	return EXIT_FAILURE;
 }
-
