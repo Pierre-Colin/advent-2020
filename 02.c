@@ -5,7 +5,6 @@
  * To Public License, Version 2, as published by Sam Hocevar. See
  * http://www.wtfpl.net/ for more details.
  */
-#include <inttypes.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -14,37 +13,29 @@
 int
 day02(FILE * const in)
 {
-	uint8_t low, high;
-	char c;
-	char password[32];
-	int matched;
-	uint16_t numbers = 0;
-	uint16_t positions = 0;
-	while ((matched = fscanf(in,
-	                         "%" SCNu8 "-%" SCNu8 " %c: %31s\n",
-	                         &low,
-	                         &high,
-	                         &c,
-	                         password)) == 4)
-	{
-		uint8_t occurences = 0;
-		for (const char *it = password; *it != 0; it++) {
+	size_t low, high;
+	char c, *pass;
+	uintmax_t numbers = 0, positions = 0;
+	while (fscanf(in, "%zu-%zu %c: %m[a-z]", &low, &high, &c, &pass) == 4) {
+		size_t occurences = 0;
+		for (const char *it = pass; *it != 0; it++) {
 			if (*it == c)
 				occurences++;
 		}
 		if (low <= occurences && occurences <= high)
 			numbers++;
-		const bool fmatch = password[low - 1] == c;
-		const bool smatch = password[high - 1] == c;
+		const bool fmatch = pass[low - 1] == c;
+		const bool smatch = pass[high - 1] == c;
+		free(pass);
 		if ((fmatch || smatch) && !(fmatch && smatch))
 			positions++;
+		if (fgetc(in) != '\n')
+			break;
 	}
-	if (matched != EOF) {
+	if (!feof(in)) {
 		perror("Could not parse input");
 		return EXIT_FAILURE;
 	}
-	printf("Numbers: %" PRIu16 "\nPositions: %" PRIu16 "\n",
-	       numbers,
-	       positions);
+	printf("Numbers: %ju\nPositions: %ju\n", numbers, positions);
 	return EXIT_SUCCESS;
 }
