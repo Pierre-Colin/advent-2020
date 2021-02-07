@@ -5,13 +5,13 @@
  * To Public License, Version 2, as published by Sam Hocevar. See
  * http://www.wtfpl.net/ for more details.
  */
+#include <errno.h>
 #include <inttypes.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 struct Node {
-	uint16_t value;
+	uint_fast16_t value;
 	struct Node *next;
 };
 
@@ -22,11 +22,10 @@ static Node *head = NULL;
 static void
 freelist(void)
 {
-	Node *node = head;
-	while (node != NULL) {
-		Node *next = node->next;
-		free(node);
-		node = next;
+	while (head != NULL) {
+		Node * const next = head->next;
+		free(head);
+		head = next;
 	}
 }
 
@@ -36,12 +35,14 @@ day01(FILE * const in)
 	if (atexit(freelist) != 0)
 		fputs("Call to `atexit` failed; memory may leak\n", stderr);
 	Node *tail = NULL;
-	int inputerr;
-	uint16_t input;
-	while ((inputerr = fscanf(in, "%" SCNu16 "\n", &input)) == 1) {
-		Node *node = malloc(sizeof(Node));
+	uint_fast16_t input;
+	while (fscanf(in, "%" SCNuFAST16 "\n", &input) == 1) {
+		Node * const node = malloc(sizeof(Node));
 		if (node == NULL) {
-			perror("Failed to allocate node");
+			if (errno != 0)
+				perror("Could not parse puzzle input");
+			else
+				fputs("Could not parse puzzle input\n", stderr);
 			return EXIT_FAILURE;
 		}
 		node->value = input;
@@ -52,7 +53,7 @@ day01(FILE * const in)
 			head = node;
 		tail = node;
 	}
-	if (inputerr != EOF) {
+	if (!feof(in)) {
 		fputs("Bad input format\n", stderr);
 		return EXIT_FAILURE;
 	}
@@ -63,19 +64,19 @@ day01(FILE * const in)
 	for (const Node *i = head; i->next != NULL; i = i->next) {
 		for (const Node *j = i->next; j != NULL; j = j->next) {
 			if (i->value + j->value == 2020) {
-				printf("2\t%" PRIu32 "\n",
-				       ((uint32_t) i->value)
-				       * ((uint32_t) j->value));
+				printf("2\t%" PRIuFAST32 "\n",
+				       ((uint_fast32_t) i->value)
+				       * ((uint_fast32_t) j->value));
 			}
 			if (j->next == NULL)
 				continue;
 			for (const Node *k = j->next; k != NULL; k = k->next) {
 				if (i->value + j->value + k->value != 2020)
 					continue;
-				printf("3\t%" PRIu64 "\n",
-				       ((uint64_t) i->value)
-				       * ((uint64_t) j->value)
-				       * ((uint64_t) k->value));
+				printf("3\t%" PRIuFAST64 "\n",
+				       (uint_fast64_t) i->value
+				       * (uint_fast64_t) j->value
+				       * (uint_fast64_t) k->value);
 			}
 		}
 	}
