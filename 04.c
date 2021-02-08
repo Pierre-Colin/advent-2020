@@ -7,9 +7,9 @@
  */
 #include <ctype.h>
 #include <errno.h>
-#include <inttypes.h>
 #include <regex.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -35,14 +35,17 @@ static Field fielddefs[] = {
 static void
 freefields(void)
 {
-	for (size_t f = 0; f < sizeof(fielddefs) / sizeof(Field); f++)
+	for (uint_fast8_t f = 0; f < sizeof(fielddefs) / sizeof(Field); f++)
 		regfree(&fielddefs[f].pattern);
 }
 
 static void
-checkpassport(uint8_t *fields, bool error, uint64_t *present, uint64_t *valid)
+checkpassport(const uint_fast8_t fields,
+              const bool error,
+              uintmax_t * const restrict present,
+              uintmax_t * const restrict valid)
 {
-	if ((*fields & 0x7f) == 0x7f) {
+	if ((fields & 0x7f) == 0x7f) {
 		(*present)++;
 		if (!error)
 			(*valid)++;
@@ -50,16 +53,19 @@ checkpassport(uint8_t *fields, bool error, uint64_t *present, uint64_t *valid)
 }
 
 static void
-tryfields(const char *name, const char *value, uint8_t *fields, bool *error)
+tryfields(const char * const restrict name,
+          const char * const restrict value,
+          uint_fast8_t * const restrict fields,
+          bool * const restrict error)
 {
-	for (uint8_t f = 0; f < sizeof(fielddefs) / sizeof(Field); f++) {
-		if (strcmp(name, fielddefs[f].name) == 0) {
-			if (regexec(&fielddefs[f].pattern, value, 0, NULL, 0)
-			    == REG_NOMATCH || (*fields & (1u << f)))
-				*error = true;
-			*fields |= 1 << f;
-			break;
-		}
+	for (uint_fast8_t f = 0; f < sizeof(fielddefs) / sizeof(Field); f++) {
+		if (strcmp(name, fielddefs[f].name) != 0)
+			continue;
+		if (regexec(&fielddefs[f].pattern, value, 0, NULL, 0) != 0
+		    || (*fields & (1u << f)) != 0)
+			*error = true;
+		*fields |= 1u << f;
+		break;
 	}
 }
 
@@ -68,23 +74,27 @@ day04(FILE * const in)
 {
 	if (atexit(freefields) != 0)
 		fputs("Call to `atexit` failed; memory may leak\n", stderr);
-	for (size_t f = 0; f < sizeof(fielddefs) / sizeof(Field); f++) {
+	for (uint_fast8_t f = 0; f < sizeof(fielddefs) / sizeof(Field); f++) {
 		const int err = regcomp(&fielddefs[f].pattern,
 		                        fielddefs[f].regex,
 		                        REG_EXTENDED | REG_NOSUB); 
 		if (err != 0) {
-			char errbuf[128];
-			regerror(err, &fielddefs[f].pattern, errbuf, 128);
+			const size_t n = regerror(err,
+			                          &fielddefs[f].pattern,
+			                          NULL,
+			                          0);
+			char errbuf[n];
+			regerror(err, &fielddefs[f].pattern, errbuf, n);
 			fprintf(stderr,
 			        "Could not compile regex: %s\n",
 			        errbuf);
+			return EXIT_FAILURE;
 		}
 	}
-	char field[4];
-	uint8_t fields = 0;
+	uint_fast8_t fields = 0;
 	bool error = false;
-	uint64_t present = 0, valid = 0;
-	char *value;
+	uintmax_t present = 0, valid = 0;
+	char field[4], *value;
 	while (!feof(in) && !ferror(in)) {
 		if (fscanf(in, "%3[a-z]:%m[#0-9a-z]", field, &value) != 2) {
 			if (errno != 0)
@@ -104,13 +114,13 @@ day04(FILE * const in)
 		} while (isspace(end));
 		ungetc(end, in);
 		if (lines > 1) {
-			checkpassport(&fields, error, &present, &valid);
+			checkpassport(fields, error, &present, &valid);
 			fields = 0;
 			error = false;
 		}
 	}
-	checkpassport(&fields, error, &present, &valid);
-	printf("Present\t%" PRIu64 "\n", present);
-	printf("Valid\t%" PRIu64 "\n", valid);
+	checkpassport(fields, error, &present, &valid);
+	printf("Present\t%ju\n", present);
+	printf("Valid\t%ju\n", valid);
 	return EXIT_SUCCESS;
 }
