@@ -6,15 +6,19 @@
  * http://www.wtfpl.net/ for more details.
  */
 #include <errno.h>
-#include <inttypes.h>
+#include <limits.h>
 #include <regex.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #define SIZE_MATCH(r) ((size_t) (r.rm_eo - r.rm_so + 1))
 #define MAX_RULES 1024
+
+/* Upper bound to how many digits a given type may hold */
+#define DIGITS(T) (CHAR_BIT * 10 * sizeof(T) / (9 * sizeof(char)))
 
 typedef union {
 	char *str;
@@ -83,7 +87,7 @@ freecontainlist(ContainNode *node)
 	while (node != NULL) {
 		if (!converted)
 			free(node->u.str);
-		ContainNode *const temp = node->next;
+		ContainNode * const temp = node->next;
 		free(node);
 		node = temp;
 	}
@@ -92,7 +96,7 @@ freecontainlist(ContainNode *node)
 static char *
 clonefromto(const char *const string, const regmatch_t bounds)
 {
-	char *new = malloc(SIZE_MATCH(bounds) * sizeof(char));
+	char * const new = malloc(SIZE_MATCH(bounds) * sizeof(char));
 	if (new != NULL) {
 		memcpy(new,
 		       string + bounds.rm_so,
@@ -108,8 +112,7 @@ makelist(const char *str)
 	errno = 0;
 	if (strcmp(str, "no other bags.") == 0)
 		return NULL;
-	ContainNode *head = NULL;
-	ContainNode *tail = NULL;
+	ContainNode *head = NULL, *tail = NULL;
 	while (str[0] != 0) {
 		regmatch_t match[5];
 		if (regexec(&listpattern, str, 5, match, 0) == REG_NOMATCH) {
@@ -117,9 +120,9 @@ makelist(const char *str)
 			freecontainlist(head);
 			return NULL;
 		}
-		uint8_t quantity = 0;
+		uint_fast8_t quantity = 0;
 		for (regoff_t i = match[1].rm_so; i < match[1].rm_eo; i++) {
-			const uint8_t new = 10 * quantity + str[i] - '0';
+			const uint_fast8_t new = 10 * quantity + str[i] - '0';
 			if (new < quantity) {
 				errno = EINVAL;
 				freecontainlist(head);
@@ -127,8 +130,8 @@ makelist(const char *str)
 			}
 			quantity = new;
 		}
-		char *const bag = clonefromto(str, match[2]);
-		ContainNode *new = malloc(sizeof(ContainNode));
+		char * const bag = clonefromto(str, match[2]);
+		ContainNode * const new = malloc(sizeof(ContainNode));
 		if (new == NULL) {
 			free(bag);
 			freecontainlist(head);
@@ -145,6 +148,18 @@ makelist(const char *str)
 		str += match[4].rm_eo;
 	}
 	return head;
+}
+
+static void
+parseerr(const char * const str, const uintmax_t line)
+{
+	if (errno != 0) {
+		char buf[strlen(str) + 10 + DIGITS(uintmax_t)];
+		sprintf(buf, "%s on line %ju", str, line);
+		perror(buf);
+	} else {
+		fprintf(stderr, "%s on line %ju\n", str, line);
+	}
 }
 
 static bool
@@ -177,25 +192,26 @@ freedata(void)
 }
 
 static bool
-hasbag(const Rule *const rule, const char *const name, const size_t calls)
+hasbag(const Rule * const restrict rule,
+       const char * const restrict name,
+       const size_t calls)
 {
+	const ContainNode *node;
 	if (strcmp(rule->container, name) == 0)
 		return true;
-	if (calls == 0) {
+	if (calls == 0)
 		return false;
-		exit(EXIT_FAILURE);
-	}
-	for (ContainNode *node = rule->contains; node; node = node->next) {
+	for (node = rule->contains; node != NULL; node = node->next) {
 		if (hasbag(rules + node->u.id, name, calls - 1))
 			return true;
 	}
 	return false;
 }
 
-static uint64_t
+static uintmax_t
 countbags(const size_t id)
 {
-	uint64_t count = 0;
+	uintmax_t count = 0;
 	for (ContainNode *node = rules[id].contains; node; node = node->next)
 		count += node->quantity * (1 + countbags(node->u.id));
 	return count;
@@ -204,10 +220,11 @@ countbags(const size_t id)
 static void
 tryregcomp(regex_t *const pattern, const char *const regex)
 {
-	int result = regcomp(pattern, regex, REG_EXTENDED);
+	const int result = regcomp(pattern, regex, REG_EXTENDED);
 	if (result != 0) {
-		char buf[128];
-		regerror(result, pattern, buf, sizeof(buf) / sizeof(char));
+		const size_t n = regerror(result, pattern, NULL, 0);
+		char buf[n];
+		regerror(result, pattern, buf, n);
 		fprintf(stderr, "Could not compile regex: %s\n", buf);
 		exit(EXIT_FAILURE);
 	}
@@ -216,27 +233,24 @@ tryregcomp(regex_t *const pattern, const char *const regex)
 int
 day07(FILE * const in)
 {
-	char *input;
 	if (atexit(freedata) != 0)
 		fputs("Call to `atexit` failed; memory may leak\n", stderr);
 	tryregcomp(&inputpattern, "^([a-z ]+) bags contain ([0-9a-z ,]+)\\.$");
 	tryregcomp(&listpattern, "^([0-9]+) (([a-z ])+) bags?(, |\\.)");
-	int scanres;
-	while ((scanres = fscanf(in, "%m[0-9a-z ,.]%*1[\n]", &input)) != EOF) {
-		if (scanres < 1) {
-			fputs("Bad input format\n", stderr);
-			return EXIT_FAILURE;
-		}
+	uintmax_t line = 1;
+	char *input;
+	errno = 0;
+	while (fscanf(in, "%m[0-9a-z ,.]", &input) == 1) {
 		regmatch_t regmatch[3];
 		if (regexec(&inputpattern, input, 3, regmatch, 0) != 0) {
 			free(input);
-			fputs("Bad input format\n", stderr);
+			parseerr("Bad puzzle input format", line);
 			return EXIT_FAILURE;
 		}
 		char *const new = clonefromto(input, regmatch[1]);
 		if (new == NULL) {
 			free(input);
-			perror("String copy failed");
+			parseerr("Could not copy string", line);
 			return EXIT_FAILURE;
 		}
 		Rule rule;
@@ -244,27 +258,39 @@ day07(FILE * const in)
 		rule.contains = makelist(input + regmatch[2].rm_so);
 		if (errno != 0) {
 			free(input);
-			perror("Could not allocate list");
+			parseerr("Could not allocate list", line);
 			return EXIT_FAILURE;
 		}
 		addrule(rule);
 		free(input);
+		const int next = fgetc(in);
+		if (next != EOF && next != '\n') {
+			fprintf(stderr,
+			        "Bad input format on line %ju\n",
+			        line);
+			return EXIT_FAILURE;
+		}
+		line++;
+	}
+	if (!feof(in) || ferror(in)) {
+		fputs("Puzzle input parsing failed\n", stderr);
+		return EXIT_FAILURE;
 	}
 	if (!convertrules()) {
 		fputs("A bag contains a nonexisting bag\n", stderr);
 		return EXIT_FAILURE;
 	}
-	uint16_t nbags = 0;
+	size_t nbags = 0;
 	for (size_t i = 0; i < nrules; i++) {
 		if (hasbag(rules + i, "shiny gold", nrules))
 			nbags++;
 	}
-	printf("w/ SGB\t%" PRIu16 "\n", nbags - 1);
+	printf("w/ SGB\t%zu\n", nbags - 1);
 	const size_t id = getrule("shiny gold");
 	if (id == nrules) {
 		fputs("Shiny gold bag not found\n", stderr);
 		return EXIT_FAILURE;
 	}
-	printf("In SGB\t%" PRIu64 "\n", countbags(id));
+	printf("In SGB\t%ju\n", countbags(id));
 	return EXIT_SUCCESS;
 }
