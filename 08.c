@@ -6,37 +6,35 @@
  * http://www.wtfpl.net/ for more details.
  */
 #include <errno.h>
-#include <inttypes.h>
+#include <limits.h>
 #include <regex.h>
+#include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#define MAX_LINES ((size_t) 1024)
+/* Upper bound to how many digits a given type may hold */
+#define DIGITS(T) (CHAR_BIT * 10 * sizeof(T) / (9 * sizeof(char)))
 
-typedef enum {
-	ACC,
-	JMP,
-	NOP
-} Operation;
+typedef enum { ACC, JMP, NOP } Operation;
 
 typedef struct {
 	Operation op;
-	int64_t x;
+	intmax_t x;
 } Instruction;
 
-typedef enum {
-	NO_RUN,
-	LOOPED,
-	TERMINATED
-} RunResult;
+typedef enum { NO_RUN, LOOPED, TERMINATED } RunResult;
 
-static regex_t codepattern;
+static regex_t reg;
+static Instruction *instr = NULL;
+static size_t cinstr = 0, ninstr = 0;
 
 static void
 freedata(void)
 {
-	regfree(&codepattern);
+	regfree(&reg);
+	free(instr);
 }
 
 static Operation
@@ -49,54 +47,41 @@ parseop(const char *const str)
 	return NOP;
 }
 
-static int64_t
-parsei64(const char *const str, const regmatch_t match)
+static bool
+resizeinstructions(void)
 {
-	int64_t x = 0;
-	for (regoff_t i = match.rm_so + 1; i < match.rm_eo; i++) {
-		if (x > (INT64_MAX - str[i] + '0') / 10) {
-			fprintf(stderr,
-			        "Operand %s out of bounds\n",
-			        str + match.rm_so);
-			return EXIT_FAILURE;
-		}
-		x = 10 * x + str[i] - '0';
-	}
-	if (str[match.rm_so] == '-')
-		return -x;
-	return x;
+	if (ninstr < cinstr)
+		return true;
+	if (cinstr >= SIZE_MAX / 2)
+		return false;
+	cinstr = (cinstr > 0)? 2 * cinstr : 1;
+	Instruction * const new = realloc(instr, cinstr * sizeof(Instruction));
+	if (new == NULL)
+		return false;
+	instr = new;
+	return true;
 }
 
 static void
-execinstr(const Instruction *const instructions,
-          uint8_t *const beenthere,
-          size_t *const pc,
-          int64_t *const acc)
+parseerr(const char * const str, const uintmax_t line)
 {
-	beenthere[*pc / 8] |= 1u << (*pc % 8);
-	switch (instructions[*pc].op) {
-	case ACC:
-		*acc += instructions[*pc].x;
-		/* FALLTHROUGH */
-	case NOP:
-		(*pc)++;
-		break;
-	case JMP:
-		*pc += instructions[*pc].x;
+	if (errno != 0) {
+		char buf[strlen(str) + 10 + DIGITS(uintmax_t)];
+		sprintf(buf, "%s on line %ju", str, line);
+		perror(buf);
+	} else {
+		fprintf(stderr, "%s on line %ju\n", str, line);
 	}
 }
 
 static RunResult
-subsrun(Instruction *const instructions,
-        const size_t ninstr,
-        const size_t s,
-        int64_t *const acc)
+subsrun(const size_t s, intmax_t * const acc)
 {
-	if (s < MAX_LINES) {
-		if (instructions[s].op == JMP)
-			instructions[s].op = NOP;
-		else if (instructions[s].op == NOP && instructions[s].x != 0)
-			instructions[s].op = JMP;
+	if (s < SIZE_MAX) {
+		if (instr[s].op == JMP)
+			instr[s].op = NOP;
+		else if (instr[s].op == NOP && instr[s].x != 0)
+			instr[s].op = JMP;
 		else
 			return NO_RUN;
 	}
@@ -111,18 +96,14 @@ subsrun(Instruction *const instructions,
 		} else if (pc == ninstr - 1) {
 			break;
 		}
-		execinstr(instructions, beenthere, &pc, acc);
+		beenthere[pc / 8] |= 1u << (pc % 8);
+		if (instr[pc].op == ACC)
+			*acc += instr[pc].x;
+		pc += instr[pc].op == JMP? instr[pc].x : 1;
 	}
-	if (s < MAX_LINES) {
-		if (instructions[s].op == JMP)
-			instructions[s].op = NOP;
-		else
-			instructions[s].op = JMP;
-	}
-	if (pc == ninstr - 1)
-		return TERMINATED;
-	else
-		return LOOPED;
+	if (s < SIZE_MAX)
+		instr[s].op = instr[s].op == JMP? NOP : JMP;
+	return pc == ninstr - 1? TERMINATED : LOOPED;
 }
 
 int
@@ -130,59 +111,54 @@ day08(FILE * const in)
 {
 	if (atexit(freedata) != 0)
 		fputs("Call to `atexit` failed; memory may leak\n", stderr);
-	int res = regcomp(&codepattern,
-	                  "^(acc|jmp|nop) ([+-][0-9]+)$",
-	                  REG_EXTENDED);
+	int res = regcomp(&reg, "^(acc|jmp|nop) ([+-][0-9]+)$", REG_EXTENDED);
 	if (res != 0) {
-		char buf[128];
-		regerror(res, &codepattern, buf, 128);
+		const size_t n = regerror(res, &reg, NULL, 0);
+		char buf[n];
+		regerror(res, &reg, buf, n);
 		fprintf(stderr, "Could not compile regex: %s", buf);
 		return EXIT_FAILURE;
 	}
-	Instruction instructions[MAX_LINES];
-	size_t ninstr = 0;
-	char input[17];
-	while ((res = fscanf(in, "%16[acjmnop 0-9+-]%*1[\n]", input)) != EOF) {
-		if (res < 1) {
-			if (errno != 0)
-				perror("Falied to read input");
-			else
-				fputs("Bad input format\n", stderr);
-			return EXIT_FAILURE;
-		}
+	uintmax_t line = 1;
+	char input[6 + DIGITS(intmax_t)], fmt[17 + DIGITS(uintmax_t)];
+	sprintf(fmt, "%%%ju[acjmnop 0-9+-]", DIGITS(size_t));
+	while (fscanf(in, fmt, input) == 1) {
 		regmatch_t match[3];
-		if (regexec(&codepattern, input, 3, match, 0) == REG_NOMATCH) {
-			fputs("Bad input format\n", stderr);
+		if (regexec(&reg, input, 3, match, 0) == REG_NOMATCH) {
+			fprintf(stderr, "Bad input format on line %ju\n", line);
 			return EXIT_FAILURE;
 		}
 		input[match[1].rm_eo] = 0;
-		if (ninstr == MAX_LINES) {
-			fprintf(stderr,
-			        "%zu instruction limit reached\n",
-			        MAX_LINES);
+		if (!resizeinstructions()) {
+			parseerr("Could not reallocate instructions", line);
 			return EXIT_FAILURE;
 		}
-		instructions[ninstr++] = (Instruction) {
-			.op = parseop(input),
-			.x = parsei64(input, match[2])
-		};
+		instr[ninstr].op = parseop(input);
+		sscanf(input + match[2].rm_so, "%jd", &instr[ninstr++].x);
+		const int next = fgetc(in);
+		if (next != '\n' && next != EOF) {
+			fprintf(stderr, "Line %ju is too long\n", line);
+			return EXIT_FAILURE;
+		}
+		line++;
 	}
-	int64_t acc = 0;
-	switch (subsrun(instructions, ninstr, MAX_LINES, &acc)) {
-	case LOOPED:
-		printf("Loop\t%" PRIi64 "\n", acc);
-		break;
-	default:
+	if (!feof(in) || ferror(in)) {
+		fputs("Puzzle input parsing failed\n", stderr);
+		return EXIT_FAILURE;
+	}
+	intmax_t acc = 0;
+	if (subsrun(SIZE_MAX, &acc) != LOOPED) {
 		fputs("Program was supposed to loop but didn't\n", stderr);
 		return EXIT_FAILURE;
 	}
+	printf("Loop\t%jd\n", acc);
 	for (size_t i = 0; i < ninstr; i++) {
 		acc = 0;
-		const RunResult result = subsrun(instructions, ninstr, i, &acc);
+		const RunResult result = subsrun(i, &acc);
 		if (result == NO_RUN) {
 			continue;
 		} else if (result == TERMINATED) {
-			printf("No loop\t%" PRIi64 "\n", acc);
+			printf("No loop\t%jd\n", acc);
 			return EXIT_SUCCESS;
 		}
 	}
