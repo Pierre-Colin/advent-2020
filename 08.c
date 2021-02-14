@@ -74,6 +74,12 @@ parseerr(const char * const str, const uintmax_t line)
 	}
 }
 
+static bool
+overflows(const intmax_t x, const intmax_t y)
+{
+	return (y > 0 && x > INTMAX_MAX - y) || (y < 0 && x < INTMAX_MIN - y);
+}
+
 static RunResult
 subsrun(const size_t s, intmax_t * const acc)
 {
@@ -97,8 +103,16 @@ subsrun(const size_t s, intmax_t * const acc)
 			break;
 		}
 		beenthere[pc / 8] |= 1u << (pc % 8);
-		if (instr[pc].op == ACC)
+		if (instr[pc].op == ACC) {
+			if (overflows(*acc, instr[pc].x)) {
+				fprintf(stderr,
+				        "%jd + %jd overflows\n",
+				        *acc,
+				        instr[pc].x);
+				exit(EXIT_FAILURE);
+			}
 			*acc += instr[pc].x;
+		}
 		pc += instr[pc].op == JMP? instr[pc].x : 1;
 	}
 	if (s < SIZE_MAX)
