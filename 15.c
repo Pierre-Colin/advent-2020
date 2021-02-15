@@ -7,7 +7,6 @@
  */
 #include <errno.h>
 #include <inttypes.h>
-#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -24,7 +23,7 @@ playturn(uint_fast32_t num[UINT32_C(30000000)],
 {
 	const uint_fast32_t temp = num[last];
 	num[last] = turn;
-	return temp > turn? 0 : turn - temp;
+	return (temp <= turn) * (turn - temp);
 }
 
 int

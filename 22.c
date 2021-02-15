@@ -258,9 +258,7 @@ static int
 cmphistory(Card *lhs[2], const CardSlice rhs[2])
 {
 	const int cmp = cmpdeck(lhs[0], rhs);
-	if (cmp != 0)
-		return cmp;
-	return cmpdeck(lhs[1], rhs + 1);
+	return cmp != 0? cmp : cmpdeck(lhs[1], rhs + 1);
 }
 
 static bool

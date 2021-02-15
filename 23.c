@@ -15,11 +15,7 @@
 static bool
 pickedup(const uint_fast32_t dest, const uint_fast32_t pickup[3])
 {
-	for (size_t i = 0; i < 3; i++) {
-		if (pickup[i] == dest)
-			return true;
-	}
-	return false;
+	return (pickup[0] == dest) | (pickup[1] == dest) | (pickup[2] == dest);
 }
 
 static void
@@ -34,7 +30,7 @@ play(const uint_fast32_t ncups,
 			cups[cups[current]],
 			cups[cups[cups[current]]]
 		};
-		uint_fast32_t dest = (current > 0)? current - 1 : ncups - 1;
+		uint_fast32_t dest = current > 0? current - 1: ncups - 1;
 		while (pickedup(dest, pickup))
 			dest = dest == 0? ncups - 1 : dest - 1;
 		cups[current] = cups[pickup[2]];
