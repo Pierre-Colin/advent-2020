@@ -12,16 +12,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-enum {
-	HAS_SEAT = 1,
-	SEATING = 2,
-	WILL_SEAT = 4
-};
+enum { HAS_SEAT = 1, SEATING = 2, WILL_SEAT = 4 };
 
 struct Node {
 	uint64_t *line;
-	struct Node *next;
-	struct Node *prev;
+	struct Node *prev, *next;
 };
 
 typedef struct Node Node;
@@ -31,35 +26,34 @@ static Node *head = NULL;
 static void
 freelist(void)
 {
-	Node *node = head;
-	while (node != NULL) {
-		free(node->line);
-		Node *temp = node->next;
-		free(node);
-		node = temp;
+	while (head != NULL) {
+		free(head->line);
+		Node * const temp = head->next;
+		free(head);
+		head = temp;
 	}
 }
 
 static bool
-hasflag(const uint64_t *const line, const uint64_t flag, const size_t i)
+hasflag(const uint64_t * const line, const uint64_t flag, const size_t i)
 {
 	return (line[i / 21] & (flag << (3 * (i % 21)))) != 0;
 }
 
 static void
-setflag(uint64_t *const line, const uint64_t flag, const size_t i)
+setflag(uint64_t * const line, const uint64_t flag, const size_t i)
 {
 	line[i / 21] |= flag << (3 * (i % 21));
 }
 
 static void
-unsetflag(uint64_t *const line, const uint64_t flag, const size_t i)
+unsetflag(uint64_t * const line, const uint64_t flag, const size_t i)
 {
 	line[i / 21] &= ~(flag << (3 * (i % 21)));
 }
 
 static void
-dupflag(uint64_t *const line, uint64_t dest, uint64_t src, const size_t i)
+dupflag(uint64_t * const line, uint64_t dest, uint64_t src, const size_t i)
 {
 	uint64_t pattern = line[i / 21] & (src << (3 * (i % 21)));
 	if (pattern == 0)
@@ -69,12 +63,12 @@ dupflag(uint64_t *const line, uint64_t dest, uint64_t src, const size_t i)
 }
 
 static uint8_t
-iteradjother(const Node *const other, const size_t i, const size_t width)
+iteradjother(const Node * const other, const size_t i, const size_t width)
 {
 	if (other == NULL)
 		return 0;
 	uint8_t neighbors = 0;
-	for (size_t j = (i > 0)? i - 1:0; j <= i + 1 && j < width; j++) {
+	for (size_t j = (i > 0) * (i - 1); (j <= i + 1) & (j < width); j++) {
 		if (hasflag(other->line, SEATING, j))
 			neighbors++;
 	} 
@@ -107,10 +101,8 @@ iteradjacent(const size_t width)
 {
 	bool changed = false;
 	for (Node *node = head; node != NULL; node = node->next) {
-		for (size_t i = 0; i < width; i++) {
-			if (treatadj(node, width, i))
-				changed = true;
-		}
+		for (size_t i = 0; i < width; i++)
+			changed |= treatadj(node, width, i);
 	}
 	for (Node *node = head; node != NULL; node = node->next) {
 		for (size_t i = 0; i < width; i++)
@@ -120,7 +112,7 @@ iteradjacent(const size_t width)
 }
 
 static bool
-lookdirection(const Node *const node,
+lookdirection(const Node * const node,
               const size_t width,
               const size_t i,
               const int8_t vdir,
@@ -133,21 +125,16 @@ lookdirection(const Node *const node,
 			other = other->next;
 		else if (vdir < 0)
 			other = other->prev;
-		if (other == NULL)
-			return false;
-		if (j == 0 && hdir < 0)
-			return false;
-		else if (j + hdir >= width)
+		if (other == NULL || (j == 0 && hdir < 0) || j + hdir >= width)
 			return false;
 		j += hdir;
-		if (hasflag(other->line, HAS_SEAT, j)) {
+		if (hasflag(other->line, HAS_SEAT, j))
 			return hasflag(other->line, SEATING, j);
-		}
 	}
 }
 
 static uint8_t
-lookaround(const Node *const node, const size_t width, const size_t i)
+lookaround(const Node * const node, const size_t width, const size_t i)
 {
 	uint8_t seen = 0;
 	for (int8_t dx = -1; dx <= 1; dx++) {
@@ -162,7 +149,7 @@ lookaround(const Node *const node, const size_t width, const size_t i)
 }
 
 static bool
-treatseen(const Node *const node, const size_t width, const size_t i)
+treatseen(const Node * const node, const size_t width, const size_t i)
 {
 	if (!hasflag(node->line, HAS_SEAT, i))
 		return false;;
@@ -194,10 +181,10 @@ iterseen(const size_t width)
 	return changed;
 }
 
-static uint64_t
+static uintmax_t
 countoccupied(const size_t width)
 {
-	uint64_t occupied = 0;
+	uintmax_t occupied = 0;
 	for (Node *node = head; node != NULL; node = node->next) {
 		for (size_t i = 0; i < width; i++) {
 			if (hasflag(node->line, SEATING, i))
@@ -215,15 +202,7 @@ day11(FILE * const in)
 	Node *tail = NULL;
 	size_t width = 0;
 	char *input;
-	int scanres;
-	while ((scanres = fscanf(in, "%m[.L]%*1[\n]", &input)) != EOF) {
-		if (scanres < 1) {
-			if (errno != 0)
-				perror("Input failed");
-			else
-				fputs("Bad input format\n", stderr);
-			return EXIT_FAILURE;
-		}
+	while (fscanf(in, "%m[.L]", &input) == 1) {
 		if (width == 0) {
 			width = strlen(input);
 		} else if (strlen(input) != width) {
@@ -233,7 +212,7 @@ day11(FILE * const in)
 		}
 		uint64_t *line = malloc((width / 21 + 1) * sizeof(uint64_t));
 		if (line == NULL) {
-			perror("Allocation failed");
+			perror("Could not allocate node line");
 			free(input);
 			return EXIT_FAILURE;
 		}
@@ -244,9 +223,9 @@ day11(FILE * const in)
 				                << (3 * (i % 21));
 		}
 		free(input);
-		Node *new = malloc(sizeof(Node));
+		Node * const new = malloc(sizeof(Node));
 		if (new == NULL) {
-			perror("Allocation failed");
+			perror("Could not allocate new node");
 			free(line);
 			return EXIT_FAILURE;
 		}
@@ -260,14 +239,23 @@ day11(FILE * const in)
 			new->prev = tail;
 		}
 		tail = new;
+		const int next = fgetc(in);
+		if (next != '\n' && next != EOF) {
+			fprintf(stderr, "Unexpected character: %c\n", next);
+			return EXIT_FAILURE;
+		}
+	}
+	if (!feof(in) || ferror(in)) {
+		fputs("Puzzle input parsing failed\n", stderr);
+		return EXIT_FAILURE;
 	}
 	while (iteradjacent(width));
-	printf("Adj\t%" PRIu64 "\n", countoccupied(width));
+	printf("Adj\t%ju\n", countoccupied(width));
 	for (Node *node = head; node != NULL; node = node->next) {
 		for (size_t i = 0; i < width; i++)
 			unsetflag(node->line, SEATING | WILL_SEAT, i);
 	}
 	while(iterseen(width));
-	printf("Seen\t%" PRIu64 "\n", countoccupied(width));
+	printf("Seen\t%ju\n", countoccupied(width));
 	return EXIT_SUCCESS;
 }

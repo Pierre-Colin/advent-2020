@@ -12,54 +12,29 @@
 
 #define ABS(x) ((x >= 0)? x : -x)
 
-typedef enum {
-	EAST,
-	NORTH,
-	WEST,
-	SOUTH
-} Direction;
+typedef enum { EAST, NORTH, WEST, SOUTH } Direction;
 
-static int8_t
-rsin(uint64_t n)
+static int_fast8_t
+rsin(const uintmax_t n)
 {
-	if (n % 2 == 0)
-		return 0;
-	if (n % 4 == 1)
-		return 1;
-	return -1;
+	return (n % 2) * (((n % 4 == 1) << 1) - 1);
 }
 
-static int8_t
-rcos(uint64_t n)
+static int_fast8_t
+rcos(const uintmax_t n)
 {
-	if (n % 2 == 1)
-		return 0;
-	if (n % 4 == 0)
-		return 1;
-	return -1;
+	return (n % 2 == 0) * (((n % 4 == 0) << 1) - 1);
 }
 
 int
 day12(FILE * const in)
 {
-	int64_t xa = 0, ya = 0;
-	int64_t xb = 0, yb = 0;
-	int64_t xw = 10, yw = 1;
+	intmax_t xa = 0, ya = 0, xb = 0, yb = 0, xw = 10, yw = 1, value;
 	Direction dir = EAST;
 	char action;
-	uint16_t value;
-	int scanres;
-	while ((scanres = fscanf(in, "%c%" SCNu16 "%*1[\n]", &action, &value))
-	       != EOF) {
-		if (scanres < 2) {
-			if (errno != 0)
-				perror("Input failed");
-			else
-				fputs("Bad input format\n", stderr);
-			return EXIT_FAILURE;
-		}
-		const uint64_t a = value / 90;
-		int64_t nxw;
+	while (fscanf(in, "%1c%ju", &action, &value) == 2) {
+		const uintmax_t a = value / 90;
+		intmax_t nxw;
 		switch (action) {
 		case 'N':
 			ya += value;
@@ -99,8 +74,17 @@ day12(FILE * const in)
 			fprintf(stderr, "Invalid action: %c\n", action);
 			return EXIT_FAILURE;
 		}
+		const int next = fgetc(in);
+		if (next != '\n' && next != EOF) {
+			fprintf(stderr, "Unexpected character: %c\n", next);
+			return EXIT_FAILURE;
+		}
 	}
-	printf("Move\t%" PRIi64 "\n", ABS(xa) + ABS(ya));
-	printf("Waypt\t%" PRIi64 "\n", ABS(xb) + ABS(yb));
+	if (!feof(in) || ferror(in)) {
+		fputs("Puzzle input parsing failed\n", stderr);
+		return EXIT_FAILURE;
+	}
+	printf("Move\t%jd\n", ABS(xa) + ABS(ya));
+	printf("Waypt\t%jd\n", ABS(xb) + ABS(yb));
 	return EXIT_SUCCESS;
 }
