@@ -5,24 +5,19 @@
  * To Public License, Version 2, as published by Sam Hocevar. See
  * http://www.wtfpl.net/ for more details.
  */
-#include <errno.h>
 #include <inttypes.h>
-#include <regex.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 /* Linked list took ~15 s; binary tree takes ~50 ms */
 struct Node {
-	uint64_t addr;
-	uint64_t val;
-	struct Node *left;
-	struct Node *right;
+	uint_fast64_t addr, val;
+	struct Node *left, *right;
 };
 
 typedef struct Node Node;
 
-static regex_t maskreg, memreg;
 static Node *head;
 
 static void
@@ -36,40 +31,24 @@ freetree(Node *node)
 }
 
 /* Consumes the tree; this saves a couple ms */
-static uint64_t
-sumtree(Node *node)
+static uintmax_t
+sumtree(Node * const node)
 {
 	if (node == NULL)
 		return 0;
-	uint64_t sum = node->val + sumtree(node->left) + sumtree(node->right);
+	uintmax_t sum = node->val + sumtree(node->left) + sumtree(node->right);
 	free(node->left);
 	free(node->right);
-	node->left = NULL;
-	node->right = NULL;
+	node->left = node->right = NULL;
 	return sum;
 }
 
 static void
-pregerr(const int result, const regex_t *const preg)
+addnode(const uint_fast64_t addr, const uint_fast64_t val)
 {
-	size_t n = 8;
-	for (;;) {
-		char buf[n];
-		if (regerror(result, preg, buf, n) >= n) {
-			n *= 2;
-		} else {
-			fprintf(stderr, "Could not compile regex: %s\n", buf);
-			return;
-		}
-	}
-}
-
-static void
-addnode(uint64_t addr, uint64_t val)
-{
-	Node *node = malloc(sizeof(Node));
+	Node * const node = malloc(sizeof(Node));
 	if (node == NULL) {
-		perror("Allocation failed");
+		fputs("Could not allocate new node\n", stderr);
 		exit(EXIT_FAILURE);
 	}
 	node->addr = addr;
@@ -105,7 +84,10 @@ addnode(uint64_t addr, uint64_t val)
 }
 
 static void
-floataddr(uint64_t addr, const bool *floating, uint8_t bit, uint64_t val)
+floataddr(uint_fast64_t addr,
+          const bool *floating,
+          uint_fast8_t bit,
+          uint_fast64_t val)
 {
 	if (bit >= 36) {
 		addnode(addr, val);
@@ -120,27 +102,19 @@ floataddr(uint64_t addr, const bool *floating, uint8_t bit, uint64_t val)
 }
 
 static void
-runmeminstr(char *input, const regmatch_t *match, uint64_t *mem, uint64_t mask)
+runmeminstr(const char input[restrict 48],
+            uint_fast64_t mem[restrict 65536],
+            uint_fast64_t mask)
 {
-	input[match[1].rm_eo] = 0;
-	uint16_t addr;
-	if (sscanf(input + match[1].rm_so, "%" SCNu16, &addr) != 1) {
-		fprintf(stderr,
-		        "%s doesn't fit in a 16-bit integer\n",
-		        input + match[1].rm_so);
+	uint_fast64_t addr, val;
+	if (sscanf(input, "mem[%" SCNuFAST64 "] = %" SCNuFAST64, &addr, &val)
+	    != 2) {
+		fprintf(stderr, "Bad input format: %s\n", input);
 		exit(EXIT_FAILURE);
 	}
-	uint64_t value;
-	if (sscanf(input + match[2].rm_so, "%" SCNu64, &value) != 1) {
-		fprintf(stderr,
-		        "%s doesn't fit in a 64-bit integer\n",
-		        input + match[2].rm_so);
-		exit(EXIT_FAILURE);
-	}
-	uint64_t modaddr = addr;
-	uint64_t modval = value;
+	uint_fast64_t modaddr = addr, modval = val;
 	bool floating[36] = { false };
-	for (uint64_t i = 0; i < 36; i++) {
+	for (uint_fast8_t i = 0; i < 36; i++) {
 		if (mask % 3 == 2) {
 			modval |= UINT64_C(1) << i;
 			modaddr |= UINT64_C(1) << i;
@@ -151,15 +125,36 @@ runmeminstr(char *input, const regmatch_t *match, uint64_t *mem, uint64_t mask)
 		}
 		mask /= 3;
 	}
-	floataddr(modaddr, floating, 0, value);
+	floataddr(modaddr, floating, 0, val);
 	mem[addr] = modval;
+}
+
+static bool
+runmaskinstr(const char input[restrict 48],
+             uint_fast64_t * const restrict mask)
+{
+	int n;
+	sscanf(input, "mask = %*36[01X]%n", &n);
+	if (n != 43)
+		return false;
+	uint_fast64_t nmask = 0;
+	for (uint_fast8_t i = 0; i < 36; i++) {
+		if (input[7 + i] == 0)
+			return false;
+		nmask *= 3;
+		if ((input[7 + i] >> 1) == ('0' >> 1))
+			nmask += input[7 + i] - '0' + 1;
+	}
+	if (input[43] == 0) {
+		*mask = nmask;
+		return true;
+	}
+	return false;
 }
 
 static void
 freedata(void)
 {
-	regfree(&maskreg);
-	regfree(&memreg);
 	freetree(head);
 }
 
@@ -168,49 +163,28 @@ day14(FILE * const in)
 {
 	if (atexit(freedata) != 0)
 		fputs("Call to `atexit` failed; memory may leak\n", stderr);
-	int res = regcomp(&maskreg, "^mask = [X0-9]{36}$", REG_EXTENDED);
-	if (res != 0) {
-		pregerr(res, &maskreg);
-		return EXIT_FAILURE;
-	}
-	res = regcomp(&memreg, "^mem\\[([0-9]+)\\] = ([0-9]+)$", REG_EXTENDED);
-	if (res != 0) {
-		pregerr(res, &memreg);
-		return EXIT_FAILURE;
-	}
-	uint64_t mask = 0;
-	uint64_t mem[65536] = { 0 };
+	uint_fast64_t mask = 0, mem[65536] = { 0 };
 	char input[48];
-	while ((res = fscanf(in, "%47[^\n]%*1[\n]", input)) == 1) {
-		regmatch_t match[3];
-		if (regexec(&maskreg, input, 0, NULL, 0) == 0) {
-			mask = 0;
-			for (uint8_t i = 0; i < 36; i++) {
-				mask *= 3;
-				if ((input[7 + i] >> 1) == ('0' >> 1))
-					mask += input[7 + i] - '0' + 1;
-			}
-		} else if (regexec(&memreg, input, 3, match, 0) == 0) {
-			runmeminstr(input, match, mem, mask);
-		} else {
-			fprintf(stderr, "Bad input on line: \"%s\"\n", input);
+	while (fscanf(in, "%47[^\n]", input) == 1) {
+		if (!runmaskinstr(input, &mask))
+			runmeminstr(input, mem, mask);
+		const int next = fgetc(in);
+		if (next != '\n' && next != EOF) {
+			fprintf(stderr, "Unexpected character: %c\n", next);
 			return EXIT_FAILURE;
 		}
 	}
-	if (res != EOF) {
-		if (errno != 0)
-			perror("Input failed");
-		else
-			fputs("Bad input format\n", stderr);
+	if (!feof(in) || ferror(in)) {
+		fputs("Error occured while parsing puzzle input\n", stderr);
 		return EXIT_FAILURE;
 	}
-	uint64_t sum = 0;
-	for (uint32_t i = 0; i < 65536; i++) {
-		if (mem[i] > UINT64_MAX - sum)
-			fputs("Overflow detected\n", stderr);
+	uintmax_t sum = 0;
+	for (uint_fast32_t i = 0; i < 65536; i++) {
+		if (mem[i] > UINTMAX_MAX - sum)
+			fputs("Integer wraparound detected\n", stderr);
 		sum += mem[i];
 	}
-	printf("Ver 1\t%" PRIu64 "\n", sum);
-	printf("Ver 2\t%" PRIu64 "\n", sumtree(head));
+	printf("Ver 1\t%ju\n", sum);
+	printf("Ver 2\t%ju\n", sumtree(head));
 	return EXIT_SUCCESS;
 }
