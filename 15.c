@@ -5,16 +5,9 @@
  * To Public License, Version 2, as published by Sam Hocevar. See
  * http://www.wtfpl.net/ for more details.
  */
-#include <errno.h>
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
-
-#define PRINT_ERR(s) \
-	if (errno != 0) \
-		perror(s); \
-	else \
-		fputs(s "\n", stderr);
 
 static uint_fast32_t
 playturn(uint_fast32_t num[UINT32_C(30000000)],
@@ -30,10 +23,9 @@ int
 day15(FILE * const in)
 {
 	uint_fast32_t turn = 0, last = UINT_FAST32_MAX, input;
-	errno = 0;
 	uint_fast32_t *num = malloc(UINT32_C(30000000) * sizeof(uint_fast32_t));
 	if (num == NULL) {
-		PRINT_ERR("Could not allocate the number history");
+		fputs("Could not allocate the number history\n", stderr);
 		return EXIT_FAILURE;
 	}
 	for (uint_fast32_t i = 0; i < UINT32_C(30000000); i++)
@@ -51,7 +43,7 @@ day15(FILE * const in)
 		turn++;
 	}
 	if (!feof(in)) {
-		PRINT_ERR("Error occured during puzzle input parsing");
+		fputs("Error occured while parsing puzzle input\n", stderr);
 		free(num);
 		return EXIT_FAILURE;
 	}
