@@ -6,29 +6,12 @@
  * http://www.wtfpl.net/ for more details.
  */
 #include <ctype.h>
-#include <errno.h>
-#include <inttypes.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-#define PRINT_ERR(s) \
-	do { \
-		if (errno != 0) \
-			perror(s); \
-		else \
-			fputs(s "\n", stderr); \
-	} while (false)
-
-typedef enum {
-	TEOF,
-	TEOL,
-	PCLOSE,
-	MULT,
-	PLUS,
-	POPEN,
-	NUMBER
-} TokenType;
+typedef enum { TEOF, TEOL, PCLOSE, MULT, PLUS, POPEN, NUMBER } TokenType;
 
 typedef struct {
 	TokenType type;
@@ -43,10 +26,9 @@ struct Node {
 typedef struct Node Node;
 
 static bool
-push(Node **stack, uintmax_t val)
+push(Node ** const stack, const uintmax_t val)
 {
-	errno = 0;
-	Node *new = malloc(sizeof(Node));
+	Node * const new = malloc(sizeof(Node));
 	if (new == NULL)
 		return false;
 	new->val = val;
@@ -56,11 +38,11 @@ push(Node **stack, uintmax_t val)
 }
 
 static bool
-pop(Node **stack, uintmax_t *result)
+pop(Node ** const restrict stack, uintmax_t * const restrict result)
 {
 	if (*stack == NULL)
 		return false;
-	Node *top = *stack;
+	Node * const top = *stack;
 	*stack = top->next;
 	*result = top->val;
 	free(top);
@@ -71,14 +53,14 @@ static void
 freestack(Node *stack)
 {
 	while (stack != NULL) {
-		Node *temp = stack->next;
+		Node * const temp = stack->next;
 		free(stack);
 		stack = temp;
 	}
 }
 
 static int
-opcomp(TokenType lhs, TokenType rhs)
+opcomp(const TokenType lhs, const TokenType rhs)
 {
 	if (lhs > rhs)
 		return 1;
@@ -91,25 +73,19 @@ static bool
 addwilloverflow(const uintmax_t x, const uintmax_t y)
 {
 	if (x > UINTMAX_MAX - y) {
-		fprintf(stderr,
-		        "Integer overflow detected "
-		        "(%" PRIuMAX " + %" PRIuMAX ")\n",
-		        x,
-		        y);
-		errno = ERANGE;
+		fprintf(stderr, "%ju + %ju causes integer wraparound\n", x, y);
 		return true;
 	}
 	return false;
 }
 
 static bool
-emitop(Node **acc, Node **ops, TokenType op)
+emitop(Node ** const restrict acc,
+       Node ** const restrict ops,
+       const TokenType op)
 {
-	if (*ops == NULL || opcomp(op, (*ops)->val) >= 0) {
-		if (!push(ops, op))
-			return false;
-		return true;
-	}
+	if (*ops == NULL || opcomp(op, (*ops)->val) >= 0)
+		return push(ops, op);
 	while (*acc != NULL && *ops != NULL && opcomp(op, (*ops)->val) < 0) {
 		uintmax_t val, topop = 1;
 		pop(acc, &val);
@@ -126,13 +102,13 @@ emitop(Node **acc, Node **ops, TokenType op)
 			break;
 		case MULT:
 			if ((*acc)->val >= UINTMAX_MAX / val) {
-				fputs("Integer overflow detected\n", stderr);
+				fputs("Integer wraparound detected\n", stderr);
 				return false;
 			}
 			(*acc)->val *= val;
 			break;
 		default:
-			fprintf(stderr, "%" PRIuMAX " was in ops\n", topop);
+			fprintf(stderr, "%ju was in ops\n", topop);
 			return false;
 		}
 	}
@@ -144,10 +120,9 @@ emitop(Node **acc, Node **ops, TokenType op)
 }
 
 static bool
-nexttok(FILE * const in, Token *tok)
+nexttok(FILE * const restrict in, Token * const restrict tok)
 {
 	int c;
-	errno = 0;
 	while ((c = fgetc(in)) == ' ');
 	ungetc(c, in);
 	if (isdigit(c)) {
@@ -155,6 +130,8 @@ nexttok(FILE * const in, Token *tok)
 		return fscanf(in, "%ju", &tok->val) == 1;
 	}
 	switch (c) {
+	default:
+		return false;
 	case EOF:
 		tok->type = TEOF;
 		break;
@@ -172,30 +149,25 @@ nexttok(FILE * const in, Token *tok)
 		break;
 	case ')':
 		tok->type = PCLOSE;
-		break;
-	default:
-		errno = EDOM;
-		return false;
 	}
 	fgetc(in);
 	return true;
 }
 
 static bool
-isoperator(TokenType t)
+isoperator(const TokenType t)
 {
 	return t == PLUS || t == MULT || t == TEOL || t == PCLOSE;
 }
 
 static bool
-badtoken(uintmax_t pos, TokenType t)
+badtoken(const uintmax_t pos, const TokenType t)
 {
-	return (pos % 2 == 1 && !isoperator(t))
-	       || (pos % 2 == 0 && isoperator(t));
+	return (pos % 2) ^ isoperator(t);
 }
 
 static void
-freeandexit(Node *acc, Node *ops)
+freeandexit(Node * const restrict acc, Node * const restrict ops)
 {
 	freestack(acc);
 	freestack(ops);
@@ -203,7 +175,9 @@ freeandexit(Node *acc, Node *ops)
 }
 
 static void
-flatapplyop(uintmax_t *res, uintmax_t val, TokenType type)
+flatapplyop(uintmax_t * const res,
+            const uintmax_t val,
+            const TokenType type)
 {
 	if (type == PLUS)
 		*res += val;
@@ -214,11 +188,11 @@ flatapplyop(uintmax_t *res, uintmax_t val, TokenType type)
 }
 
 static bool
-subexpr(FILE * const in,
-        uintmax_t level,
-        uintmax_t line,
-        uintmax_t *flatres,
-        uintmax_t *stackres)
+subexpr(FILE * const restrict in,
+        const uintmax_t level,
+        const uintmax_t line,
+        uintmax_t * const restrict flatres,
+        uintmax_t * const restrict stackres)
 {
 	Token t;
 	uintmax_t pos = 0;
@@ -229,9 +203,7 @@ subexpr(FILE * const in,
 		if (!nexttok(in, &t))
 			freeandexit(acc, ops);
 		if (badtoken(pos++, t.type)) {
-			fprintf(stderr,
-			        "Syntax error on line %" PRIuMAX "\n",
-			        line);
+			fprintf(stderr, "Syntax error on line %ju\n", line);
 			freeandexit(acc, ops);
 		}
 		if (t.type == POPEN
@@ -243,13 +215,13 @@ subexpr(FILE * const in,
 		if (isoperator(t.type)) {
 			lastop = t.type;
 			if (!emitop(&acc, &ops, t.type)) {
-				PRINT_ERR("Failed to push operator to stack");
+				fputs("Could not emit operator\n", stderr);
 				freeandexit(acc, ops);
 			}
 		} else {
 			lastop = TEOL;
 			if (!push(&acc, subvalstack)) {
-				PRINT_ERR("Failed to push number on stack");
+				fputs("Could not emit number\n", stderr);
 				freeandexit(acc, ops);
 			}
 		}
@@ -263,7 +235,7 @@ subexpr(FILE * const in,
 		fputs("Accumulator ended up empty\n", stderr);
 		exit(EXIT_FAILURE);
 	} else if (acc->next != NULL) {
-		fputs("More than 1 number remain in accumulator\n", stderr);
+		fputs("More than one number remain in accumulator\n", stderr);
 		freestack(acc);
 		exit(EXIT_FAILURE);
 	}
@@ -273,14 +245,14 @@ subexpr(FILE * const in,
 }
 
 static bool
-parseexpr(FILE *in, uintmax_t *line, uintmax_t *flatacc, uintmax_t *stackacc)
+parseexpr(FILE * const restrict in,
+          uintmax_t * const restrict line,
+          uintmax_t * const restrict flatacc,
+          uintmax_t * const restrict stackacc)
 {
-	errno = 0;
 	uintmax_t flatres = 0, stackres = 0;
 	const bool cont = subexpr(in, 0, *line, &flatres, &stackres);
-	if (!cont || errno != 0)
-		return false;
-	if (addwilloverflow(*flatacc, flatres))
+	if (!cont || addwilloverflow(*flatacc, flatres))
 		return false;
 	*flatacc += flatres;
 	if (addwilloverflow(*stackacc, stackres))
@@ -293,19 +265,13 @@ parseexpr(FILE *in, uintmax_t *line, uintmax_t *flatacc, uintmax_t *stackacc)
 int
 day18(FILE * const in)
 {
-	uintmax_t line = 1;
-	uintmax_t flatacc = 0, stackacc = 0;
+	uintmax_t line = 1, flatacc = 0, stackacc = 0;
 	while (parseexpr(in, &line, &flatacc, &stackacc));
-	if (ferror(in) || errno != 0) {
-		char buf[64];
-		snprintf(buf, 64, "Bad input on line %" PRIuMAX, line);
-		if (errno != 0)
-			perror(buf);
-		else
-			fprintf(stderr, "%s\n", buf);
+	if (!feof(in) || ferror(in)) {
+		fprintf(stderr, "Puzzle input failed on line %ju\n", line);
 		return EXIT_FAILURE;
 	}
-	printf("Flat\t%" PRIuMAX "\n", flatacc);
-	printf("Stack\t%" PRIuMAX "\n", stackacc);
+	printf("Flat\t%ju\n", flatacc);
+	printf("Stack\t%ju\n", stackacc);
 	return EXIT_SUCCESS;
 }

@@ -5,30 +5,20 @@
  * To Public License, Version 2, as published by Sam Hocevar. See
  * http://www.wtfpl.net/ for more details.
  */
-#include <errno.h>
-#include <inttypes.h>
 #include <limits.h>
 #include <regex.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#define PRINT_ERR(s) \
-	if (errno != 0) \
-		perror(s); \
-	else \
-		fputs(s "\n", stderr);
 
 /* Upper bound to how many digits a given type may hold */
 #define DIGITS(T) (CHAR_BIT * 10 * sizeof(T) / (9 * sizeof(char)))
 
 #define GRAMMAR_REGEX "[0-9]+( \\| [0-9]+| [0-9]+)*|\"([ab])\""
 
-typedef enum {
-	GRAMMAR,
-	MESSAGES
-} ParseState;
+typedef enum { GRAMMAR, MESSAGES } ParseState;
 
 struct Message {
 	char *msg;
@@ -37,10 +27,7 @@ struct Message {
 
 typedef struct Message Message;
 
-typedef enum {
-	CHARACTER,
-	SEQUENCE
-} RuleType;
+typedef enum { CHARACTER, SEQUENCE } RuleType;
 
 struct Symbol {
 	uintmax_t num;
@@ -67,8 +54,7 @@ struct RuleTree {
 	bool flag;
 	RuleType type;
 	union { char ch; Sequence *seq; } val;
-	struct RuleTree *left;
-	struct RuleTree *right;
+	struct RuleTree *left, *right;
 };
 
 typedef struct RuleTree RuleTree;
@@ -120,7 +106,7 @@ static void
 freesymbols(Symbol *sym)
 {
 	while (sym != NULL) {
-		Symbol *next = sym->next;
+		Symbol * const next = sym->next;
 		free(sym);
 		sym = next;
 	}
@@ -130,7 +116,7 @@ static void
 freeseq(Sequence *seq)
 {
 	while (seq != NULL) {
-		Sequence *next = seq->next;
+		Sequence * const next = seq->next;
 		freesymbols(seq->val);
 		free(seq);
 		seq = next;
@@ -138,12 +124,11 @@ freeseq(Sequence *seq)
 }
 
 static Symbol *
-clonesymb(const Symbol *restrict sym)
+clonesymb(const Symbol * restrict sym)
 {
 	Symbol *head = NULL, *tail = NULL;
-	errno = 0;
 	while (sym != NULL) {
-		Symbol *const new = malloc(sizeof(Symbol));
+		Symbol * const new = malloc(sizeof(Symbol));
 		if (new == NULL) {
 			freesymbols(head);
 			return NULL;
@@ -161,20 +146,21 @@ clonesymb(const Symbol *restrict sym)
 }
 
 static int
-matches(Symbol *const sym, const char *restrict msg)
+matches(Symbol * const sym, const char * restrict msg)
 {
 	if (sym == NULL)
 		return *msg == 0;
 	if (*msg == 0)
 		return sym == NULL;
-	const RuleTree *rule = getrule(sym->num);
+	const RuleTree * const rule = getrule(sym->num);
 	if (rule->type == CHARACTER) {
 		if (rule->val.ch == msg[0])
 			return matches(sym->next, msg + 1);
 		return 0;
 	} else {
-		for (Sequence *seq = rule->val.seq; seq; seq = seq->next) {
-			Symbol *clone = clonesymb(seq->val);
+		const Sequence *seq;
+		for (seq = rule->val.seq; seq != NULL; seq = seq->next) {
+			Symbol * const clone = clonesymb(seq->val);
 			if (clone == NULL)
 				return -1;
 			Symbol *tail = clone;
@@ -195,9 +181,8 @@ static Symbol *
 makesymbols(const size_t size, const uintmax_t arr[size])
 {
 	Symbol *head = NULL, *tail = NULL;
-	errno = 0;
 	for (size_t i = 0; i < size; i++) {
-		Symbol *new = malloc(sizeof(Symbol));
+		Symbol * const new = malloc(sizeof(Symbol));
 		if (new == NULL) {
 			freesymbols(head);
 			return NULL;
@@ -214,7 +199,9 @@ makesymbols(const size_t size, const uintmax_t arr[size])
 }
 
 static bool
-issequence(const Sequence *const seq, size_t size, const uintmax_t arr[size])
+issequence(const Sequence * const seq,
+           const size_t size,
+           const uintmax_t arr[size])
 {
 	if (seq == NULL || seq->next != NULL)
 		return false;
@@ -231,35 +218,35 @@ issequence(const Sequence *const seq, size_t size, const uintmax_t arr[size])
 static void
 convertrule(const uintmax_t num,
             const size_t oldsize,
-            const uintmax_t old[oldsize],
+            const uintmax_t old[restrict oldsize],
             const size_t newsize,
-            const uintmax_t new[newsize])
+            const uintmax_t new[restrict newsize])
 {
-	const RuleTree *const rule = getrule(num);
+	const RuleTree * const rule = getrule(num);
 	if (rule == NULL) {
-		fprintf(stderr, "Rule %" PRIuMAX " not found\n", num);
+		fprintf(stderr, "Rule %ju not found\n", num);
 		exit(EXIT_FAILURE);
 	}
 	if (rule->type != SEQUENCE) {
 		fprintf(stderr,
-		        "Rule %" PRIuMAX " is not a disjuction of sequences\n",
+		        "Rule %ju is not a disjuction of sequences\n",
 		        num);
 		exit(EXIT_FAILURE);
 	}
 	Sequence *seq = rule->val.seq;
 	if (!issequence(seq, oldsize, old)) {
-		fprintf(stderr, "Rule %" PRIuMAX " does not generate", num);
+		fprintf(stderr, "Rule %ju does not generate", num);
 		for (size_t i = 0; i < oldsize; i++)
-			fprintf(stderr, " %" PRIuMAX, old[i]);
+			fprintf(stderr, " %ju", old[i]);
 		fputc('\n', stderr);
 		exit(EXIT_FAILURE);
 	}
 	if ((seq->next = malloc(sizeof(Sequence))) == NULL) {
-		PRINT_ERR("Could not allocate new sequence");
+		fputs("Could not allocate a new sequence\n", stderr);
 		exit(EXIT_FAILURE);
 	}
 	if ((seq->next->val = makesymbols(newsize, new)) == NULL) {
-		PRINT_ERR("Could not fill new sequence");
+		fputs("Could not fill new sequence\n", stderr);
 		free(seq->next);
 		exit(EXIT_FAILURE);
 	}
@@ -269,17 +256,16 @@ convertrule(const uintmax_t num,
 static void
 convertrules(void)
 {
-	errno = 0;
-	uintmax_t old8[1] = { 42 };
-	uintmax_t new8[2] = { 42, 8 };
+	const uintmax_t old8[1] = { 42 };
+	const uintmax_t new8[2] = { 42, 8 };
 	convertrule(8, 1, old8, 2, new8);
-	uintmax_t old11[2] = { 42, 31 };
-	uintmax_t new11[3] = { 42, 11, 31 };
+	const uintmax_t old11[2] = { 42, 31 };
+	const uintmax_t new11[3] = { 42, 11, 31 };
 	convertrule(11, 2, old11, 3, new11);
 }
 
 static void
-freerules(RuleTree *set)
+freerules(RuleTree * const set)
 {
 	if (set == NULL)
 		return;
@@ -299,34 +285,6 @@ isemptyline(FILE * const in)
 	return c == '\n' || c == EOF;
 }
 
-static void
-printinputfailed(const uintmax_t line)
-{
-	if (errno != 0) {
-		const size_t sz = 22 + DIGITS(uintmax_t);
-		char buf[sz];
-		sprintf(buf, "Input failed on line %ju", line);
-		perror(buf);
-	} else {
-		fprintf(stderr, "Bad input on line %ju\n", line);
-	}
-}
-
-static void
-printallocationerror(const uintmax_t line)
-{
-	if (errno != 0) {
-		const int temp = errno;
-		const size_t sz = 27 + DIGITS(uintmax_t);
-		char buf[sz];
-		sprintf(buf, "Allocation failed on line %ju", line);
-		errno = temp;
-		perror(buf);
-	} else {
-		fprintf(stderr, "Allocation failed on line %ju\n", line);
-	}
-}
-
 static Sequence *
 parsesequencerule(char *str)
 {
@@ -337,8 +295,7 @@ parsesequencerule(char *str)
 	while ((tok = strtok(str, " ")) != NULL) {
 		str = NULL;
 		if (newseq) {
-			errno = 0;
-			Sequence *new = malloc(sizeof(Sequence));
+			Sequence * const new = malloc(sizeof(Sequence));
 			if (new == NULL) {
 				freeseq(seqhead);
 				return NULL;
@@ -360,9 +317,8 @@ parsesequencerule(char *str)
 				return NULL;
 			}
 			newseq = true;
-		} else if (sscanf(tok, "%" SCNuMAX, &num) == 1) {
-			errno = 0;
-			Symbol *new = malloc(sizeof(Symbol));
+		} else if (sscanf(tok, "%ju", &num) == 1) {
+			Symbol * const new = malloc(sizeof(Symbol));
 			if (new == NULL) {
 				freeseq(seqhead);
 				return NULL;
@@ -387,89 +343,83 @@ parsesequencerule(char *str)
 }
 
 static bool
-parsegrammar(FILE * const in, regex_t *greg, const uintmax_t line)
+parsegrammar(FILE * const restrict in,
+             regex_t * restrict greg,
+             const uintmax_t line)
 {
 	uintmax_t num;
 	char *input;
-	errno = 0;
-	if (fscanf(in, "%ju: %m[^\n]%*1[\n]", &num, &input) == 2) {
-		regmatch_t match[3];
-		if (regexec(greg, input, 3, match, 0) != 0) {
-			fprintf(stderr,
-			        "Line %ju doesn't match: %s\n",
-			        line,
-			        input);
-			free(input);
-			return false;
-		}
-		errno = 0;
-		RuleTree *new = malloc(sizeof(RuleTree));
-		if (new == NULL) {
-			printallocationerror(line);
-			free(input);
-			return false;
-		}
-		new->num = num;
-		new->flag = false;
-		new->left = new->right = NULL;
-		if (match[2].rm_so >= 0) {
-			new->type = CHARACTER;
-			new->val.ch = input[match[2].rm_so];
-		} else {
-			new->type = SEQUENCE;
-			new->val.seq = parsesequencerule(input);
-			if (new->val.seq == NULL) {
-				printallocationerror(line);
-				free(input);
-				return false;
-			}
-		}
-		free(input);
-		if (addrule(new)) {
-			freerules(new);
-			fputs("Duplicate rule\n", stderr);
-			return false;
-		}
-		return true;
-	} else {
-		printinputfailed(line);
+	if (fscanf(in, "%ju: %m[^\n]", &num, &input) < 2) {
+		fprintf(stderr, "Input parsing failed on line %ju\n", line);
 		return false;
 	}
+	regmatch_t match[3];
+	if (regexec(greg, input, 3, match, 0) != 0) {
+		fprintf(stderr, "Line %ju doesn't match: %s\n", line, input);
+		free(input);
+		return false;
+	}
+	RuleTree * const new = malloc(sizeof(RuleTree));
+	if (new == NULL) {
+		fprintf(stderr, "Could not allocate rule on line %ju\n", line);
+		free(input);
+		return false;
+	}
+	new->num = num;
+	new->flag = false;
+	new->left = new->right = NULL;
+	if (match[2].rm_so >= 0) {
+		new->type = CHARACTER;
+		new->val.ch = input[match[2].rm_so];
+	} else {
+		new->type = SEQUENCE;
+		new->val.seq = parsesequencerule(input);
+		if (new->val.seq == NULL) {
+			fprintf(stderr, "Allocation error on line %ju\n", line);
+			free(input);
+			return false;
+		}
+	}
+	free(input);
+	if (addrule(new)) {
+		freerules(new);
+		fputs("Duplicate rules found\n", stderr);
+		return false;
+	}
+	const int next = fgetc(in);
+	if (next != '\n') {
+		fprintf(stderr, "Unexpected character: %c\n", next);
+		return false;
+	}
+	return true;
 }
 
 static bool
-parsemessage(FILE * const in, const uintmax_t line, Message **tail)
+parsemessage(FILE * const restrict in,
+             const uintmax_t line, 
+             Message ** restrict tail)
 {
 	char *input;
-	errno = 0;
-	if (fscanf(in, "%m[ab]%*1[\n]", &input) == 1) {
-		errno = 0;
-		Message *new = malloc(sizeof(Message));
-		if (new == NULL) {
-			if (errno != 0) {
-				const size_t sz = 35 + DIGITS(uintmax_t);
-				char buf[sz];
-				sprintf(buf,
-				        "Allocation failed on line %ju",
-				        line);
-				perror(buf);
-			} else {
-				fprintf(stderr,
-				        "Allocation failed on line %ju\n",
-				        line);
-			}
-			free(input);
-			return false;
-		}
-		new->msg = input;
-		new->next = NULL;
-		if (msg == NULL)
-			msg = new;
-		else
-			(*tail)->next = new;
-		*tail = new;
-	} else {
-		printinputfailed(line);
+	if (fscanf(in, "%m[ab]", &input) < 1) {
+		fprintf(stderr, "Input failed on line %ju\n", line);
+		return false;
+	}
+	Message * const new = malloc(sizeof(Message));
+	if (new == NULL) {
+		fprintf(stderr, "Allocation failed on line %ju\n", line);
+		free(input);
+		return false;
+	}
+	new->msg = input;
+	new->next = NULL;
+	if (msg == NULL)
+		msg = new;
+	else
+		(*tail)->next = new;
+	*tail = new;
+	const int next = fgetc(in);
+	if (next != '\n' && next != EOF) {
+		fprintf(stderr, "Unexpected character: %c\n", next);
 		return false;
 	}
 	return true;
@@ -481,17 +431,11 @@ parse(FILE * const in)
 	regex_t greg;
 	int result = regcomp(&greg, GRAMMAR_REGEX, REG_EXTENDED);
 	if (result != 0) {
-		size_t size = 2;
-		for (;;) {
-			char buf[size];
-			if (regerror(result, &greg, buf, size) < size) {
-				fprintf(stderr,
-				        "Could not compile regex: %s\n",
-				        buf);
-				exit(EXIT_FAILURE);
-			}
-			size *= 2;
-		}
+		const size_t sz = regerror(result, &greg, NULL, 0);
+		char buf[sz];
+		regerror(result, &greg, buf, sz);
+		fprintf(stderr, "Could not compile regex: %s\n", buf);
+		exit(EXIT_FAILURE);
 	}
 	Message *msgtail = NULL;
 	ParseState state = GRAMMAR;
@@ -522,9 +466,9 @@ parse(FILE * const in)
 static bool
 hascycle(const uintmax_t num)
 {
-	RuleTree *node = getrule(num);
+	RuleTree * const node = getrule(num);
 	if (node == NULL) {
-		fprintf(stderr, "Rule %" PRIuMAX " not found\n", num);
+		fprintf(stderr, "Grammar rule %ju not found\n", num);
 		exit(EXIT_FAILURE);
 	}
 	if (node->flag)
@@ -544,15 +488,6 @@ hascycle(const uintmax_t num)
 	return false;
 }
 
-static void
-findcycle(void)
-{
-	if (hascycle(0)) {
-		fputs("The rules are cyclical\n", stderr);
-		exit(EXIT_FAILURE);
-	}
-}
-
 static uintmax_t
 countmatches(void)
 {
@@ -561,7 +496,7 @@ countmatches(void)
 	for (const Message *m = msg; m != NULL; m = m->next) {
 		const int res = matches(&sym, m->msg);
 		if (res < 0) {
-			PRINT_ERR("Failed allocation");
+			fputs("Memory allocation failed\n", stderr);
 			exit(EXIT_FAILURE);
 		} else if (res > 0) {
 			count++;
@@ -573,12 +508,11 @@ countmatches(void)
 static void
 freedata(void)
 {
-	Message *m = msg;
-	while (m != NULL) {
-		Message *const next = m->next;
-		free(m->msg);
-		free(m);
-		m = next;
+	while (msg != NULL) {
+		Message * const next = msg->next;
+		free(msg->msg);
+		free(msg);
+		msg = next;
 	}
 	freerules(root);
 }
@@ -593,9 +527,12 @@ day19(FILE * const in)
 		fputs("Errors happened while parsing puzzle input\n", stderr);
 		return EXIT_FAILURE;
 	}
-	findcycle();
-	printf("Default\t%" PRIuMAX "\n", countmatches());
+	if (hascycle(0)) {
+		fputs("The rules are cyclical\n", stderr);
+		return EXIT_FAILURE;
+	}
+	printf("Default\t%ju\n", countmatches());
 	convertrules();
-	printf("Fixed\t%" PRIuMAX "\n", countmatches());
+	printf("Fixed\t%ju\n", countmatches());
 	return EXIT_SUCCESS;
 }
