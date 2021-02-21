@@ -6,10 +6,9 @@
  * http://www.wtfpl.net/ for more details.
  */
 #include <ctype.h>
-#include <errno.h>
-#include <inttypes.h>
 #include <limits.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -35,18 +34,16 @@ typedef struct Food Food;
 static Food *fdhead = NULL;
 
 static char **ingarr = NULL;
-static size_t cingarr = 0;
-static size_t singarr = 0;
+static size_t cingarr = 0, singarr = 0;
 
 static char **agarr = NULL;
-static size_t cagarr = 0;
-static size_t sagarr = 0;
+static size_t cagarr = 0, sagarr = 0;
 
 static bool
-addtoarr(char * const str,
-         char *** const arr,
-         size_t * restrict const cap,
-         size_t * restrict const sz,
+addtoarr(char * const restrict str,
+         char *** const restrict arr,
+         size_t * const restrict cap,
+         size_t * const restrict sz,
          const size_t k)
 {
 	if (*sz == *cap) {
@@ -65,10 +62,10 @@ addtoarr(char * const str,
 }
 
 static const char *
-addstr(char * const str,
-       char *** const arr,
-       size_t * restrict const cap,
-       size_t * restrict const sz)
+addstr(char * const restrict str,
+       char *** const restrict arr,
+       size_t * const restrict cap,
+       size_t * const restrict sz)
 {
 	size_t a = 0, b = *sz;
 	while (a + 1 < b) {
@@ -95,7 +92,7 @@ addstr(char * const str,
 }
 
 static size_t
-getindex(const char * const str, const size_t sz, char *arr[sz])
+getindex(const char * const restrict str, const size_t sz, char *arr[sz])
 {
 	size_t a = 0, b = sz;
 	while (a + 1 < b) {
@@ -121,24 +118,11 @@ freelist(List *list)
 	}
 }
 
-static void
-parseerror(const uintmax_t line, const char * const str)
-{
-	if (errno != 0) {
-		char buf[strlen(str) + 9 + DIGITS(uintmax_t)];
-		sprintf(buf, "%s on line %ju", str, line);
-		perror(buf);
-	} else {
-		fprintf(stderr, "%s on line %ju\n", str, line);
-	}
-}
-
 static List *
-parseing(FILE * const in, bool * const hasag)
+parseing(FILE * const restrict in, bool * const restrict hasag)
 {
 	List *ihead = NULL, *itail = NULL;
-	char *input;
-	char space;
+	char *input, space;
 	int result;
 	while ((result = fscanf(in, "%m[a-z]%1c", &input, &space)) >= 1) {
 		const char *sing = addstr(input, &ingarr, &cingarr, &singarr);
@@ -146,7 +130,7 @@ parseing(FILE * const in, bool * const hasag)
 			freelist(ihead);
 			return NULL;
 		}
-		List *new = malloc(sizeof(List));
+		List * const new = malloc(sizeof(List));
 		if (new == NULL) {
 			freelist(ihead);
 			return NULL;
@@ -200,7 +184,7 @@ keepparsingag(FILE * const in)
 }
 
 static bool
-parseag(FILE * const in, List ** const agref)
+parseag(FILE * const restrict in, List ** const restrict agref)
 {
 	char *input;
 	if (fscanf(in, "contains %m[a-z]", &input) < 1)
@@ -256,34 +240,35 @@ keepparsing(FILE * const in)
 }
 
 static void
+parsepanic(const uintmax_t line,
+           List * const restrict list,
+           const char * const restrict err)
+{
+	freelist(list);
+	fprintf(stderr, "Could not %s on line %ju\n", err, line);
+	exit(EXIT_FAILURE);
+}
+
+static void
 parse(FILE * const in)
 {
 	uintmax_t line = UINTMAX_C(1);
 	Food *fdtail = NULL;
-	errno = 0;
 	while (keepparsing(in)) {
 		bool hasag = false;
 		List * const ing = parseing(in, &hasag);
-		if (ing == NULL) {
-			parseerror(line, "Could not parse ingredients");
-			exit(EXIT_FAILURE);
-		}
+		if (ing == NULL)
+			parsepanic(line, NULL, "parse ingredients");
 		Food * const new = malloc(sizeof(Food));
-		if (new == NULL) {
-			parseerror(line, "Could not allocate food");
-			freelist(ing);
-			exit(EXIT_FAILURE);
-		}
+		if (new == NULL)
+			parsepanic(line, ing, "allocade food data");
 		new->ing = ing;
 		new->ag = NULL;
 		new->next = NULL;
 		if (hasag) {
 			List *ag;
-			if (!parseag(in, &ag)) {
-				parseerror(line, "Could not parse allergens");
-				freelist(ing);
-				exit(EXIT_FAILURE);
-			}
+			if (!parseag(in, &ag))
+				parsepanic(line, ing, "parse allergen data");
 			new->ag = ag;
 		}
 		if (fdhead == NULL)
@@ -361,7 +346,7 @@ countinert(const bool inghasag[singarr][sagarr])
 			}
 		}
 	}
-	uintmax_t count = UINTMAX_C(0);
+	uintmax_t count = 0;
 	for (const Food *food = fdhead; food != NULL; food = food->next) {
 		for (const List *n = food->ing; n != NULL; n = n->next)
 			count += inert[n->val.i];
@@ -407,7 +392,6 @@ day21(FILE * const in)
 {
 	if (atexit(freedata) != 0)
 		fputs("Call to `atexit` failed; memory may leak\n", stderr);
-	errno = 0;
 	parse(in);
 	convert();
 	bool inghasag[singarr][sagarr];
@@ -416,7 +400,7 @@ day21(FILE * const in)
 			inghasag[ing][ag] = true;
 	}
 	match(inghasag);
-	printf("Inert\t%" PRIuMAX "\n", countinert(inghasag));
+	printf("Inert\t%ju\n", countinert(inghasag));
 	printinglist(inghasag);
 	return EXIT_FAILURE;
 }

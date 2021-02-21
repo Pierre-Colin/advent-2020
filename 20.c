@@ -5,10 +5,9 @@
  * To Public License, Version 2, as published by Sam Hocevar. See
  * http://www.wtfpl.net/ for more details.
  */
-#include <errno.h>
-#include <inttypes.h>
 #include <limits.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -32,26 +31,13 @@ typedef struct {
 
 static size_t tilesz = 0;
 static Tile *head = NULL;
-static size_t jigsawsz = 0;
-static size_t imagesz = 0;
+static size_t jigsawsz = 0, imagesz = 0;
 
 static const bool monster[3][20] = {
 	{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0 },
 	{ 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 1 },
 	{ 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0 }
 };
-
-static void
-printlineerror(const char *const str, const uintmax_t line)
-{
-	if (errno != 0) {
-		char buf[strlen(str) + 10 + DIGITS(uintmax_t)];
-		sprintf(buf, "%s on line %ju", str, line);
-		perror(buf);
-	} else {
-		fprintf(stderr, "%s on line %ju\n", str, line);
-	}
-}
 
 static bool
 hastile(const uintmax_t num)
@@ -69,7 +55,7 @@ parselabel(FILE * const in, const uintmax_t line)
 	char newline;
 	uintmax_t tilenum;
 	if (fscanf(in, "Tile %ju:%1c", &tilenum, &newline) < 2) {
-		printlineerror("Input failed", line);
+		fprintf(stderr, "Input parsing failed on line %ju\n", line);
 		exit(EXIT_FAILURE);
 	}
 	if (newline != '\n') {
@@ -80,32 +66,33 @@ parselabel(FILE * const in, const uintmax_t line)
 }
 
 static void
-expectnewline(FILE * const in, const uintmax_t line, void *const ptr)
+expectnewline(FILE * const restrict in,
+              const uintmax_t line,
+              void * const restrict ptr)
 {
-	char end = fgetc(in);
+	const int end = fgetc(in);
 	if (end != EOF && end != '\n') {
 		fprintf(stderr, "Expected new line on line %ju\n", line);
 		free(ptr);
 		exit(EXIT_FAILURE);
 	} else if (ferror(in)) {
-		printlineerror("Input failed", line);
+		fprintf(stderr, "Internal stream error on line %ju\n", line);
 		free(ptr);
 		exit(EXIT_FAILURE);
 	}
 }
 
 static void
-filltileline(FILE * const in,
+filltileline(FILE * const restrict in,
              const uintmax_t line,
-             const char *restrict const format,
-             bool *restrict const tile,
+             const char * const restrict format,
+             bool * const restrict tile,
              const size_t l)
 {
-	char buf[tilesz + 1];
-	char newline;
+	char buf[tilesz + 1], newline;
 	const int result = fscanf(in, format, buf, &newline);
 	if ((result < 2 && !feof(in)) || result < 1) {
-		printlineerror("Input failed", line);
+		fprintf(stderr, "Input parsing failed on line %ju\n", line);
 		free(tile);
 		exit(EXIT_FAILURE);
 	} else if (newline != '\n' && !feof(in)) {
@@ -126,15 +113,14 @@ filltileline(FILE * const in,
 }
 
 static bool *
-parsetile(FILE * const in, uintmax_t *const line)
+parsetile(FILE * const restrict in, uintmax_t * const restrict line)
 {
 	static char format[8 + DIGITS(size_t)];
 	bool *tile = NULL;
 	if (tilesz == 0) {
-		char *input;
-		char newline;
+		char *input, newline;
 		if (fscanf(in, "%m[.#]%1c", &input, &newline) < 2) {
-			printlineerror("Input failed", *line);
+			fprintf(stderr, "Input failed on line %ju\n", *line);
 			exit(EXIT_FAILURE);
 		} else if (newline != '\n') {
 			fprintf(stderr,
@@ -145,7 +131,7 @@ parsetile(FILE * const in, uintmax_t *const line)
 		}
 		tilesz = strlen(input);
 		if ((tile = malloc(tilesz * tilesz * sizeof(bool))) == NULL) {
-			printlineerror("Allocation failed", *line);
+			fputs("Could not allocate a new tile\n", stderr);
 			free(input);
 			exit(EXIT_FAILURE);
 		}
@@ -156,7 +142,7 @@ parsetile(FILE * const in, uintmax_t *const line)
 		sprintf(format, "%%%zu[#.]%%c", tilesz);
 	} else {
 		if ((tile = malloc(tilesz * tilesz * sizeof(bool))) == NULL) {
-			printlineerror("Allocation failed", *line);
+			fputs("Could not allocate a new tile\n", stderr);
 			exit(EXIT_FAILURE);
 		}
 		filltileline(in, (*line)++, format, tile, 0);
@@ -170,7 +156,7 @@ parsetile(FILE * const in, uintmax_t *const line)
 static bool
 keepparsing(FILE * const in)
 {
-	const char c = fgetc(in);
+	const int c = fgetc(in);
 	if (c != EOF)
 		ungetc(c, in);
 	return c != EOF;
@@ -182,15 +168,14 @@ parse(FILE * const in)
 	Tile *tail = NULL, *tile;
 	uintmax_t line = 1, num = 0;
 	while (keepparsing(in)) {
-		errno = 0;
 		num = parselabel(in, line++);
 		if (hastile(num)) {
 			fprintf(stderr, "Tile %ju appears twice\n", num);
 			exit(EXIT_FAILURE);
 		}
-		bool *const tiledata = parsetile(in, &line);
+		bool * const tiledata = parsetile(in, &line);
 		if ((tile = malloc(sizeof(Tile))) == NULL) {
-			printlineerror("Allocation failed", line);
+			fputs("Could not allocate tile data\n", stderr);
 			free(tile);
 			exit(EXIT_FAILURE);
 		}
@@ -272,7 +257,7 @@ flipbuf(const size_t sz, bool buf[sz][sz])
 }
 
 static bool
-nexttry(bool tileimg[tilesz][tilesz], Slot *const s)
+nexttry(bool tileimg[tilesz][tilesz], Slot * const restrict s)
 {
 	if (s->flip) {
 		if (s->rot == 3)
@@ -297,7 +282,7 @@ static bool
 alreadyused(const Slot jigsaw[jigsawsz][jigsawsz],
             const size_t y,
             const size_t x,
-            const Tile *const tile)
+            const Tile * const restrict tile)
 {
 	for (size_t r = 0; r < y; r++) {
 		for (size_t c = 0; c < jigsawsz; c++) {
@@ -313,7 +298,7 @@ alreadyused(const Slot jigsaw[jigsawsz][jigsawsz],
 }
 
 static void
-applyslot(bool buf[tilesz][tilesz], const Slot *const slot)
+applyslot(bool buf[tilesz][tilesz], const Slot * const restrict slot)
 {
 	for (size_t r = 0; r < tilesz; r++) {
 		for (size_t c = 0; c < tilesz; c++)
@@ -326,7 +311,7 @@ applyslot(bool buf[tilesz][tilesz], const Slot *const slot)
 }
 
 static void
-filldown(bool down[tilesz], const Slot *restrict const slot)
+filldown(bool down[restrict tilesz], const Slot * const restrict slot)
 {
 	bool tile[tilesz][tilesz];
 	applyslot(tile, slot);
@@ -335,7 +320,7 @@ filldown(bool down[tilesz], const Slot *restrict const slot)
 }
 
 static void
-fillright(bool right[tilesz], const Slot *restrict const slot)
+fillright(bool right[restrict tilesz], const Slot * const restrict slot)
 {
 	bool tile[tilesz][tilesz];
 	applyslot(tile, slot);
@@ -347,8 +332,8 @@ static bool
 lastfits(const bool tile[tilesz][tilesz],
          const size_t y,
          const size_t x,
-         const bool up[tilesz],
-         const bool left[tilesz])
+         const bool up[restrict tilesz],
+         const bool left[restrict tilesz])
 {
 	for (size_t i = 0; i < tilesz; i++) {
 		if (y > 0 && tile[0][i] != up[i])
@@ -392,13 +377,10 @@ backtrack(Slot jigsaw[jigsawsz][jigsawsz], const size_t y, const size_t x)
 }
 
 static void
-trymultiply(uintmax_t *restrict const p, const uintmax_t x)
+trymultiply(uintmax_t * const restrict p, const uintmax_t x)
 {
 	if (*p >= UINTMAX_MAX / x) {
-		fprintf(stderr,
-		        "%" PRIuMAX " * %" PRIuMAX " causes wraparound\n",
-		        *p,
-		        x);
+		fprintf(stderr, "%ju * %ju causes wraparound\n", *p, x);
 		exit(EXIT_FAILURE);
 	}
 	*p *= x;
@@ -498,8 +480,10 @@ roughness(const bool image[imagesz][imagesz])
 {
 	uintmax_t count = 0;
 	for (size_t y = 0; y < imagesz; y++) {
-		for (size_t x = 0; x < imagesz; x++)
-			count += image[y][x] && !isinmonster(image, y, x);
+		for (size_t x = 0; x < imagesz; x++) {
+			if (image[y][x] && !isinmonster(image, y, x))
+				count++;
+		}
 	}
 	return count;
 }
@@ -508,7 +492,7 @@ static void
 freepieces(void)
 {
 	while (head != NULL) {
-		Tile *const next = head->next;
+		Tile * const next = head->next;
 		free(head->data);
 		free(head);
 		head = next;
@@ -529,7 +513,7 @@ day20(FILE * const in)
 		fputs("No solution to the jigsaw was found\n", stderr);
 		return EXIT_FAILURE;
 	}
-	printf("Corners\t%" PRIuMAX "\n", prodcorners(jigsaw));
+	printf("Corners\t%ju\n", prodcorners(jigsaw));
 	if (tilesz <= 2) {
 		fprintf(stderr,
 		        "Tile size %zu is too small for part 2\n",
@@ -543,6 +527,6 @@ day20(FILE * const in)
 		fputs("No sea monsters were found despite rotating\n", stderr);
 		return EXIT_FAILURE;
 	}
-	printf("Rough\t%" PRIuMAX "\n", roughness(image));
+	printf("Rough\t%ju\n", roughness(image));
 	return EXIT_SUCCESS;
 }
