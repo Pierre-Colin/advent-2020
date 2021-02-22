@@ -6,7 +6,6 @@
  * http://www.wtfpl.net/ for more details.
  */
 #include <ctype.h>
-#include <errno.h>
 #include <inttypes.h>
 #include <limits.h>
 #include <stdbool.h>
@@ -16,12 +15,6 @@
 
 /* Upper bound to how many digits a type may hold */
 #define DIGITS(T) (CHAR_BIT * 10 * sizeof(T) / (9 * sizeof(char)))
-
-#define PRINT_ERR(s) \
-	if (errno != 0) \
-		perror(s); \
-	else \
-		fputs(s "\n", stderr);
 
 struct Card {
 	uintmax_t val;
@@ -58,14 +51,14 @@ freelist(Card *list)
 }
 
 static void
-freedecks(Card *deck[2])
+freedecks(Card *deck[const 2])
 {
 	freelist(deck[0]);
 	freelist(deck[1]);
 }
 
 static void
-freehistory(History *his)
+freehistory(History * const his)
 {
 	if (his == NULL)
 		return;
@@ -74,18 +67,6 @@ freehistory(History *his)
 	free(his->deck[0].a);
 	free(his->deck[1].a);
 	free(his);
-}
-
-static void
-parsingerror(const char * const str, const uintmax_t line)
-{
-	if (errno != 0) {
-		char buf[strlen(str) + 10 + DIGITS(uintmax_t)];
-		sprintf(buf, "%s on line %ju", str, line);
-		perror(buf);
-	} else {
-		fprintf(stderr, "%s on line %ju\n", str, line);
-	}
 }
 
 static uintmax_t
@@ -119,7 +100,7 @@ parseplayer(FILE * const in, const uint_fast8_t pnum, uintmax_t line)
 			break;
 		Card * const new = malloc(sizeof(Card));
 		if (new == NULL) {
-			parsingerror("Could not allocate a new card", line);
+			fprintf(stderr, "%ju: Could not allocate card\n", line);
 			exit(EXIT_FAILURE);
 		}
 		new->val = val;
@@ -132,7 +113,7 @@ parseplayer(FILE * const in, const uint_fast8_t pnum, uintmax_t line)
 		totalcards++;
 	}
 	if (ferror(in)) {
-		parsingerror("Puzzle input failed", line);
+		fprintf(stderr, "%ju: Internal error while parsing\n", line);
 		exit(EXIT_FAILURE);
 	}
 	return line;
@@ -154,7 +135,7 @@ regularcombat(void)
 		for (const Card *it = card[p]; it != NULL; it = it->next) {
 			Card * const new = malloc(sizeof(Card));
 			if (new == NULL) {
-				PRINT_ERR("Could not copy cards");
+				fputs("Could not allocate card copy\n", stderr);
 				freedecks(head);
 				exit(EXIT_FAILURE);
 			}
@@ -225,33 +206,32 @@ cmpdeck(const Card *a, const CardSlice *b)
 static int
 playround(Card *card[2], const uintmax_t ncard[2])
 {
-	if (ncard[0] > card[0]->val && ncard[1] > card[1]->val) {
-		/* Recursive game */
-		Card *copy[2] = { NULL, NULL }, *tail[2] = { NULL, NULL };
-		uintmax_t ncard_copy[2] = { card[0]->val, card[1]->val };
-		for (size_t p = 0; p < 2; p++) {
-			const Card *it = card[p]->next;
-			for (uintmax_t i = 0; i < ncard_copy[p]; i++) {
-				Card * const new = malloc(sizeof(Card));
-				if (new == NULL) {
-					freedecks(copy);
-					return -1;
-				}
-				new->val = it->val;
-				new->next = NULL;
-				if (copy[p] == NULL)
-					copy[p] = new;
-				else
-					tail[p]->next = new;
-				tail[p] = new;
-				it = it->next;
+	if (ncard[0] <= card[0]->val || ncard[1] <= card[1]->val)
+		return card[1]->val > card[0]->val;
+	/* Recursive game */
+	Card *copy[2] = { NULL, NULL }, *tail[2] = { NULL, NULL };
+	uintmax_t ncard_copy[2] = { card[0]->val, card[1]->val };
+	for (size_t p = 0; p < 2; p++) {
+		const Card *it = card[p]->next;
+		for (uintmax_t i = 0; i < ncard_copy[p]; i++) {
+			Card * const new = malloc(sizeof(Card));
+			if (new == NULL) {
+				freedecks(copy);
+				return -1;
 			}
+			new->val = it->val;
+			new->next = NULL;
+			if (copy[p] == NULL)
+				copy[p] = new;
+			else
+				tail[p]->next = new;
+			tail[p] = new;
+			it = it->next;
 		}
-		int result = recursivecombat_rec(copy, tail, ncard_copy, NULL);
-		freedecks(copy);
-		return result;
 	}
-	return card[1]->val > card[0]->val;
+	const int result = recursivecombat_rec(copy, tail, ncard_copy, NULL);
+	freedecks(copy);
+	return result;
 }
 
 static int
@@ -294,13 +274,11 @@ checkhistory(History ** const his, Card *deck[2])
 		if (cmp < 0) {
 			if (it->left == NULL)
 				return addleaf(&it->left, deck)? 0 : -1;
-			else
-				it = it->left;
+			it = it->left;
 		} else {
 			if (it->right == NULL)
 				return addleaf(&it->right, deck)? 0 : -1;
-			else
-				it = it->right;
+			it = it->right;
 		}
 	}
 }
@@ -308,8 +286,8 @@ checkhistory(History ** const his, Card *deck[2])
 static int
 recursivecombat_rec(Card *head[2],
                     Card *tail[2],
-                    uintmax_t ncard[2],
-                    uintmax_t * const score)
+                    uintmax_t ncard[restrict 2],
+                    uintmax_t * const restrict score)
 {
 	History *his = NULL;
 	while (head[0] != NULL && head[1] != NULL) {
@@ -378,7 +356,6 @@ day22(FILE * const in)
 {
 	if (atexit(freedata) != 0)
 		fputs("Call to `atexit` failed; memory may leak\n", stderr);
-	errno = 0;
 	if (!parse(in)) {
 		fputs("Did not parse the entire puzzle input\n", stderr);
 		return EXIT_FAILURE;
@@ -390,7 +367,7 @@ day22(FILE * const in)
 	printf("Regular\t%ju\n", regularcombat());
 	uintmax_t score = 0;
 	if (recursivecombat(&score) < 0) {
-		PRINT_ERR("Failed to unroll recursive combat game");
+		fputs("Could not unroll recursive combat game\n", stderr);
 		return EXIT_FAILURE;
 	}
 	printf("Recurs\t%ju\n", score);

@@ -6,14 +6,13 @@
  * http://www.wtfpl.net/ for more details.
  */
 #include <ctype.h>
-#include <errno.h>
 #include <inttypes.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 static bool
-pickedup(const uint_fast32_t dest, const uint_fast32_t pickup[3])
+pickedup(const uint_fast32_t dest, const uint_fast32_t pickup[const 3])
 {
 	return (pickup[0] == dest) | (pickup[1] == dest) | (pickup[2] == dest);
 }
@@ -42,7 +41,9 @@ play(const uint_fast32_t ncups,
 }
 
 static void
-label(uint_fast8_t ncups, const uint_fast8_t icups[ncups], char out[ncups])
+label(uint_fast8_t ncups,
+      const uint_fast8_t icups[const restrict ncups],
+      char out[const restrict ncups])
 {
 	uint_fast32_t cups[ncups];
 	for (uint_fast8_t i = 0; i < ncups; i++)
@@ -58,15 +59,12 @@ label(uint_fast8_t ncups, const uint_fast8_t icups[ncups], char out[ncups])
 
 static uint_fast64_t
 stars(const uint_fast32_t ncups,
-      const uint_fast8_t icups[ncups])
+      const uint_fast8_t icups[const ncups])
 {
 	/* Too big to fit properly on the stack -- detected by valgrind */
 	uint_fast32_t * const cups = malloc(1000000 * sizeof(uint_fast32_t));
 	if (cups == NULL) {
-		if (errno != 0)
-			perror("Could not allocate cup array");
-		else
-			fputs("Could not allocate cup array\n", stderr);
+		fputs("Could not allocate the cup array\n", stderr);
 		exit(EXIT_FAILURE);
 	}
 	for (uint_fast32_t i = 0; i < 999999; i++) {

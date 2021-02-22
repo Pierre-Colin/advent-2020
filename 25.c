@@ -6,7 +6,6 @@
  * http://www.wtfpl.net/ for more details.
  */
 #include <ctype.h>
-#include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -21,7 +20,7 @@ checkeof(FILE * const in)
 			exit(EXIT_FAILURE);
 		}
 	}
-	if (!feof(in)) {
+	if (!feof(in) || ferror(in)) {
 		fputs("Puzzle input parsing failed\n", stderr);
 		exit(EXIT_FAILURE);
 	}
@@ -51,12 +50,8 @@ int
 day25(FILE * const in)
 {
 	uintmax_t doork, cardk;
-	errno = 0;
 	if (fscanf(in, "%ju%*[ \n\t]%ju", &doork, &cardk) < 2) {
-		if (errno != 0)
-			perror("Puzzle input parsing failed");
-		else
-			fputs("Bad puzzle input\n", stderr);
+		fputs("Puzzle input parsing failed\n", stderr);
 		return EXIT_FAILURE;
 	}
 	checkeof(in);
